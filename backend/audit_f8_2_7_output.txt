@@ -1,0 +1,324 @@
+﻿======================================================================
+F8.2.7 COMPREHENSIVE AUDIT REPORT
+Project: Mark Kitchen (bebfa80a-a6d0-4ace-ab79-0f42d7bdaec9)
+======================================================================
+
+--- SUMMARY ---
+  MATCHED: 23
+  CHANGED: 11
+  MISSING: 1
+  EXTRA: 23
+  UNCERTAIN: 0
+  Total MGs: 58
+
+--- DISCREPANCIES ---
+  Critical: 23
+  Info: 6
+  Warning: 10
+  Total: 39
+
+--- ITEM CATEGORIES ---
+  ACCESSORY: 13
+  APPLIANCE: 8
+  ARCHITECTURAL_ANNOTATION: 9
+  CABINET: 35
+  COMMERCIAL_CHARGE: 3
+  FILLER: 2
+  MOLDING: 6
+  PANEL: 7
+  UNKNOWN: 32
+
+======================================================================
+EXTRA CANONICAL GROUPS (23 total)
+======================================================================
+
+  [1] Canonical: LEDGE72+SMCRN
+      Raw SKU: LEDGE72+SMCRN
+      Category: MOLDING
+      D/O/A: ABSENT/1/ABSENT
+      Sources: O
+      Description: 'Alcove Hood Ledge Small Crown'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): State transition: Design ΓåÆ Order (ADDED), Order ΓåÆ Ack (OMITTED). Extra item LEDG
+
+  [2] Canonical: BEPF334
+      Raw SKU: BEPF334
+      Category: PANEL
+      D/O/A: ABSENT/2/ABSENT
+      Sources: O
+      Description: 'Base End Panel Box'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): State transition: Design ΓåÆ Order (ADDED), Order ΓåÆ Ack (OMITTED). Extra item BEPF
+
+  [3] Canonical: DEP3W
+      Raw SKU: DEP3W
+      Category: PANEL
+      D/O/A: ABSENT/2/ABSENT
+      Sources: O
+      Description: 'Filler w/ End Panel'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): State transition: Design ΓåÆ Order (ADDED), Order ΓåÆ Ack (OMITTED). Extra item DEP3
+
+  [4] Canonical: FILLER3
+      Raw SKU: FILLER3
+      Category: FILLER
+      D/O/A: ABSENT/1/ABSENT
+      Sources: O
+      Description: 'Filler - Test PO Addition'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): State transition: Design ΓåÆ Order (ADDED), Order ΓåÆ Ack (OMITTED). Extra item FILL
+
+  [5] Canonical: RK-SB
+      Raw SKU: RK-SB
+      Category: ACCESSORY
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'TOUCH UP KIT-SINK BASE'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item RK-SB added in Acknowledgement not requested in Purchase Order o
+
+  [6] Canonical: BEFP334
+      Raw SKU: BEFP334
+      Category: ARCHITECTURAL_ANNOTATION
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'BOX COLUMN FILLER'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item BEFP334 added in Acknowledgement not requested in Purchase Order
+
+  [7] Canonical: 2DBP34
+      Raw SKU: 2DBP34
+      Category: PANEL
+      D/O/A: ABSENT/2/1
+      Sources: O/A
+      Description: 'Deluxe Back Panel'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item 2DBP34 added in Purchase Order and confirmed in Acknowledgement 
+      Discrepancy: quantity(Warning): Quantity discrepancy: Order requested 2, but Acknowledgement confirmed 1
+
+  [8] Canonical: BT18-2
+      Raw SKU: BT18-2
+      Category: UNKNOWN
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'BASE TRAY CAB 18'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item BT18-2 added in Acknowledgement not requested in Purchase Order 
+
+  [9] Canonical: DEP3M
+      Raw SKU: DEP3M
+      Category: APPLIANCE
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'DISHWASHER EP PLY- 3 STILE'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item DEP3M added in Acknowledgement not requested in Purchase Order o
+
+  [10] Canonical: FLTS60
+      Raw SKU: FLTS60
+      Category: UNKNOWN
+      D/O/A: ABSENT/1/1
+      Sources: O/A
+      Description: 'Floating Shelf'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item FLTS60 added in Purchase Order and confirmed in Acknowledgement 
+
+  [11] Canonical: FLTS39
+      Raw SKU: FLTS39
+      Category: UNKNOWN
+      D/O/A: ABSENT/2/1
+      Sources: O/A
+      Description: 'Floating Shelf'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item FLTS39 added in Purchase Order and confirmed in Acknowledgement 
+
+  [12] Canonical: SMCRN8
+      Raw SKU: SMCRN8
+      Category: MOLDING
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'SMALL TRADITIONAL CROWN MLD 8'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item SMCRN8 added in Acknowledgement not requested in Purchase Order 
+
+  [13] Canonical: LEDGE72
+      Raw SKU: LEDGE72
+      Category: APPLIANCE
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'ALCOVE HOOD LEDGE'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item LEDGE72 added in Acknowledgement not requested in Purchase Order
+
+  [14] Canonical: RR
+      Raw SKU: RR
+      Category: UNKNOWN
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'REPAIR KIT'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item RR added in Acknowledgement not requested in Purchase Order or D
+
+  [15] Canonical: RKPP
+      Raw SKU: RKPP
+      Category: ACCESSORY
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'TOUCH UP KIT-PG'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item RKPP added in Acknowledgement not requested in Purchase Order or
+
+  [16] Canonical: AC8HM8
+      Raw SKU: AC8HM8
+      Category: UNKNOWN
+      D/O/A: ABSENT/ABSENT/6
+      Sources: A
+      Description: 'ARTS & CRAFTS BASE HUTCH MLD 8'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item AC8HM8 added in Acknowledgement not requested in Purchase Order 
+
+  [17] Canonical: STARTMLD696
+      Raw SKU: STARTMLD696
+      Category: MOLDING
+      D/O/A: ABSENT/8/8
+      Sources: O/A
+      Description: 'Starter Molding 6"H'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item STARTMLD696 added in Purchase Order and confirmed in Acknowledge
+      Discrepancy: sku(Info): Manufacturer SKU variant in Acknowledgement: 'STARTMOLD696' corresponds to 'STAR
+
+  [18] Canonical: TK96
+      Raw SKU: TK96
+      Category: MOLDING
+      D/O/A: ABSENT/2/1
+      Sources: O/A
+      Description: 'Toe Kick Material - 4.5"H'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item TK96 added in Purchase Order and confirmed in Acknowledgement no
+      Discrepancy: quantity(Warning): Quantity discrepancy: Order requested 2, but Acknowledgement confirmed 3
+
+  [19] Canonical: 4DB15
+      Raw SKU: 4DB15
+      Category: CABINET
+      D/O/A: ABSENT/1/1
+      Sources: O/A
+      Description: '4-Drawer Base'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item 4DB15 added in Purchase Order and confirmed in Acknowledgement n
+
+  [20] Canonical: DEP1W
+      Raw SKU: DEP1W
+      Category: APPLIANCE
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'DISHWASHER EP PLY-1 1/2 STILE MAPLE'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item DEP1W added in Acknowledgement not requested in Purchase Order o
+
+  [21] Canonical: FAP2434
+      Raw SKU: FAP2434
+      Category: APPLIANCE
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'FRAMED APPLIANCE PNL 18.25-24 HISTORIC MAPLE'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item FAP2434 added in Acknowledgement not requested in Purchase Order
+
+  [22] Canonical: 2CMUL2
+      Raw SKU: 2CMUL2
+      Category: UNKNOWN
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: '2 ECLIPSE MULL-FRONT POS 2'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item 2CMUL2 added in Acknowledgement not requested in Purchase Order 
+
+  [23] Canonical: 24MWTLDX72
+      Raw SKU: 24MWTLDX72
+      Category: APPLIANCE
+      D/O/A: ABSENT/ABSENT/1
+      Sources: A
+      Description: 'ALCOVE HOOD DELUXE MANTEL'
+      Dimensions: None
+      Discrepancy: item_presence(Critical): Extra line item 24MWTLDX72 added in Acknowledgement not requested in Purchase Or
+
+======================================================================
+MISSING CANONICAL GROUPS (1 total)
+======================================================================
+
+  [1] Canonical: 24UEPF3120
+      Raw SKU: 24UEPF3120
+      Category: UNKNOWN
+      D/O/A: 2/ABSENT/ABSENT
+      Description: ''
+      Dimensions: None
+      Discrepancy: item_presence(Warning): Drawing item (24UEPF3120) with UNKNOWN classification not found in Purchase Order ΓÇö requires reviewe
+
+======================================================================
+CHANGED CANONICAL GROUPS (11 total)
+======================================================================
+
+  [1] WST3057B | cat=UNKNOWN | D/O/A=1/2/1
+      quantity(Warning) intro=ORDER: Quantity discrepancy: Design specifies 1, but Purchase Order requested 2, confirmed as 2 in Acknowle
+
+  [2] BT36B-2 | cat=UNKNOWN | D/O/A=2/1/1
+      quantity(Warning) intro=ORDER: Quantity discrepancy: Design specifies 2, but Purchase Order requested 3 (reverted to 2 in Acknowled
+
+  [3] BFHC12 | cat=FILLER | D/O/A=1/1/1
+      sku(Info) intro=ACKNOWLEDGEMENT: Manufacturer SKU variant in Acknowledgement: 'BPFHC12' corresponds to 'BFHC12'
+
+  [4] BPS12 | cat=UNKNOWN | D/O/A=1/1/1
+      sku(Info) intro=ACKNOWLEDGEMENT: Manufacturer SKU variant in Acknowledgement: 'BP52' corresponds to 'BPS12'
+
+  [5] BBCPO45-BLL | cat=ACCESSORY | D/O/A=2/1/1
+      quantity(Warning) intro=ORDER: Quantity discrepancy: Design specifies 2, but Purchase Order requested 1, confirmed as 1 in Acknowle
+
+  [6] WST3657B | cat=UNKNOWN | D/O/A=3/3/1
+      quantity(Warning) intro=ACKNOWLEDGEMENT: Quantity discrepancy: Order requested 3, but Acknowledgement confirmed 2
+
+  [7] B18DWB | cat=CABINET | D/O/A=1/1/1
+      sku(Info) intro=ACKNOWLEDGEMENT: Manufacturer SKU variant in Acknowledgement: 'B18BWD18' corresponds to 'B18DWB'
+
+  [8] SBA36B | cat=UNKNOWN | D/O/A=1/1/1
+      sku(Info) intro=ACKNOWLEDGEMENT: Manufacturer SKU variant in Acknowledgement: 'SB36B3' corresponds to 'SBA36B'
+
+  [9] W3930 | cat=CABINET | D/O/A=3/2/1
+      quantity(Warning) intro=ORDER: Quantity discrepancy: Design specifies 3, but Purchase Order requested 2, confirmed as 2 in Acknowle
+
+  [10] 21AHSDX7230 | cat=ARCHITECTURAL_ANNOTATION | D/O/A=1/ABSENT/1
+      item_presence(Warning) intro=ORDER: State transition: Design ΓåÆ Order (OMITTED), Order ΓåÆ Ack (RESTORED). SKU 21AHSDX7230 present in Desig
+
+  [11] 22CLME1284 | cat=ARCHITECTURAL_ANNOTATION | D/O/A=2/2/1
+      sku(Info) intro=ACKNOWLEDGEMENT: Manufacturer SKU variant in Acknowledgement: '22CMEL1284' corresponds to '22CLME1284'
+      quantity(Warning) intro=ACKNOWLEDGEMENT: Quantity discrepancy: Order requested 2, but Acknowledgement confirmed 1
+
+======================================================================
+MATCHED SANITY CHECK (23 total)
+======================================================================
+  WST2157-L | UNKNOWN | D=WST2157-L(1) O=WST2157-L(1) A=WST2157(1)
+  BT24-2-R | UNKNOWN | D=BT24-2-R(1) O=BT24-2-R(1) A=BT24-2(1)
+  24W4827 | CABINET | D=24W4827(1) O=24W4827(1) A=24W4827(1)
+  4DB21 | CABINET | D=4DB21(1) O=4DB21(1) A=4DB21(1)
+  BT30B-2 | UNKNOWN | D=BT30B-2(1) O=BT30B-2(1) A=BT30B-2(1)
+  24W3618B | CABINET | D=24W3618B(2) O=24W3618B(2) A=24W3618B(1)
+  RSP27120 | UNKNOWN | D=RSP27120(1) O=RSP27120(1) A=RSP27120(1)
+  24UT3693B-4 | UNKNOWN | D=24UT3693B-4(2) O=24UT3693B-4(2) A=24UT3693B-4(1)
+  DEP1W | PANEL | D=DEP1W(1) O=DEP1W(1) A=-(None)
+  W3630 | CABINET | D=W3630(1) O=W3630(1) A=W3630(1)
+  BT18-2-L | UNKNOWN | D=BT18-2-L(1) O=BT18-2-L(1) A=-(None)
+  BW24MD | UNKNOWN | D=BW24MD(1) O=BW24MD(1) A=BW24MD(1)
+  3DB30 | CABINET | D=3DB30(1) O=3DB30(1) A=3DB30(1)
+  BT18-2-R | UNKNOWN | D=BT18-2-R(1) O=BT18-2-R(1) A=-(None)
+  SB24-L | CABINET | D=SB24-L(1) O=SB24-L(1) A=SB24(1)
+  BT33B-2 | UNKNOWN | D=BT33B-2(2) O=BT33B-2(1) A=BT33B-2(1)
+  24MNTLDX72 | ARCHITECTURAL_ANNOTATION | D=24MNTLDX72(1) O=24MNTLDX72(1) A=-(None)
+  PWS06DSPSS | APPLIANCE | D=PWS06DSPSS(1) O=-(None) A=-(None)
+  GR606F-LP | APPLIANCE | D=GR606F-LP(1) O=-(None) A=-(None)
+  LEDGE72+SMCRN | ARCHITECTURAL_ANNOTATION | D=LEDGE72+SMCRN(1) O=-(None) A=-(None)
+  TARIFFSURCHARGE | COMMERCIAL_CHARGE | D=-(None) O=-(None) A=TARIFFSURCHARGE(1)
+  SUCTIONCUPNONCHG | COMMERCIAL_CHARGE | D=-(None) O=-(None) A=SUCTIONCUPNONCHG(1)
+  FREIGHTSURCHARGE | COMMERCIAL_CHARGE | D=-(None) O=-(None) A=FREIGHTSURCHARGE(1)
+
+======================================================================
+AUDIT COMPLETE
+======================================================================

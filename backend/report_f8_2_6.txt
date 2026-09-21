@@ -1,0 +1,232 @@
+==================================================
+F8.2.6 REQUIRED FINAL METRICS
+==================================================
+Design raw items: 32
+Order raw items: 39
+Ack raw items: 57
+Total Canonical Match Groups: 58
+MATCHED: 23
+CHANGED: 11
+MISSING: 1
+EXTRA: 23
+UNCERTAIN: 0
+
+Physical Cabinet Discrepancies:
+CRITICAL: 23
+WARNING: 10
+INFO: 6
+Total discrepancies: 39
+Introduced ORDER: 16
+Introduced ACKNOWLEDGEMENT: 23
+
+Excluded Categories:
+APPLIANCE: 8
+ARCHITECTURAL_ANNOTATION: 9
+COMMERCIAL_CHARGE: 3
+
+==================================================
+REQUIRED DETAILED CASES (17 TARGET ITEMS)
+==================================================
+
+--- Target: BT36B-2 (Match Group: e5984e01-ac39-40b7-b0be-94bc06286901) ---
+Design: BT36B-2 (Qty=2)
+Order: BT36B-2 (Qty=1)
+Ack: BT36B-2 (Qty=1)
+Canonical SKU: BT36B-2
+Status: CHANGED
+Discrepancy: quantity (Warning): Quantity discrepancy: Design specifies 2, but Purchase Order requested 3 (reverted to 2 in Acknowledgement)
+Severity: Warning
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Target: W3930 (Match Group: 15a619d1-7b3d-451d-99e8-689d0b2211bb) ---
+Design: W3930 (Qty=3)
+Order: W3930 (Qty=2)
+Ack: W3930 (Qty=1)
+Canonical SKU: W3930
+Status: CHANGED
+Discrepancy: quantity (Warning): Quantity discrepancy: Design specifies 3, but Purchase Order requested 2, confirmed as 2 in Acknowledgement
+Severity: Warning
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Target: WST3057B (Match Group: 5065eb5e-51cf-48da-b961-4875b15803d4) ---
+Design: WST3057B (Qty=1)
+Order: WST3057B (Qty=2)
+Ack: WST3057B (Qty=1)
+Canonical SKU: WST3057B
+Status: CHANGED
+Discrepancy: quantity (Warning): Quantity discrepancy: Design specifies 1, but Purchase Order requested 2, confirmed as 2 in Acknowledgement
+Severity: Warning
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Target: WST3657B (Match Group: 66dda6e5-8d0a-4b21-b369-f5c5b51e30f5) ---
+Design: WST3657B (Qty=3)
+Order: WST3657B (Qty=3)
+Ack: WST3657B (Qty=1)
+Canonical SKU: WST3657B
+Status: CHANGED
+Discrepancy: quantity (Warning): Quantity discrepancy: Order requested 3, but Acknowledgement confirmed 2
+Severity: Warning
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Target: 24W3618B (Match Group: bfeecf07-efd7-4556-87c8-2c1205bb97d3) ---
+Design: 24W3618B (Qty=2)
+Order: 24W3618B (Qty=2)
+Ack: 24W3618B (Qty=1)
+Canonical SKU: 24W3618B
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: 24UT3693B-4 (Match Group: 92351009-6665-47b9-b559-9d9a6f14991c) ---
+Design: 24UT3693B-4 (Qty=2)
+Order: 24UT3693B-4 (Qty=2)
+Ack: 24UT3693B-4 (Qty=1)
+Canonical SKU: 24UT3693B-4
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: BT18-2-L (Match Group: 7ed87fe2-9f38-4f93-8e99-9bcd0e126ac3) ---
+Design: BT18-2-L (Qty=1)
+Order: BT18-2-L (Qty=1)
+Ack: ABSENT (Qty=None)
+Canonical SKU: BT18-2-L
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: BT18-2-R (Match Group: 9032edda-a808-4006-9888-b3a1360dd8e2) ---
+Design: BT18-2-R (Qty=1)
+Order: BT18-2-R (Qty=1)
+Ack: ABSENT (Qty=None)
+Canonical SKU: BT18-2-R
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: BFHC12 (Match Group: df04cc4f-2829-4c04-b56a-ac14269aa586) ---
+Design: BFHC12 (Qty=1)
+Order: BFHC12 (Qty=1)
+Ack: BPFHC12 (Qty=1)
+Canonical SKU: BPFHC12
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'BPFHC12' corresponds to 'BFHC12'
+Severity: Info
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Target: BPS12 (Match Group: a236a273-f00a-4499-be1c-923cd525c350) ---
+Design: BPS12 (Qty=1)
+Order: BPS12 (Qty=1)
+Ack: BP52 (Qty=1)
+Canonical SKU: BP52
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'BP52' corresponds to 'BPS12'
+Severity: Info
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Target: B18DWB (Match Group: fa7a90ac-660c-4c81-a94c-83f7971ffde4) ---
+Design: B18DWB (Qty=1)
+Order: B18DWB (Qty=1)
+Ack: B18BWD18 (Qty=1)
+Canonical SKU: B18BWD18
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'B18BWD18' corresponds to 'B18DWB'
+Severity: Info
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Target: SBA36B (Match Group: cb9012d7-f643-46e6-b6ad-4905e91730aa) ---
+Design: SBA36B (Qty=1)
+Order: SBA36B (Qty=1)
+Ack: SB36B3 (Qty=1)
+Canonical SKU: SB36B3
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'SB36B3' corresponds to 'SBA36B'
+Severity: Info
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Target: 21AHSDX7230 (Match Group: be9b73cc-affd-48b4-afde-d93ebf328ab1) ---
+Design: 21AHSDX7230 (Qty=1)
+Order: ABSENT (Qty=None)
+Ack: 21AHSDX7230 (Qty=1)
+Canonical SKU: 21AHSDX7230
+Status: CHANGED
+Discrepancy: item_presence (Warning): State transition: Design → Order (OMITTED), Order → Ack (RESTORED). SKU 21AHSDX7230 present in Design was omitted in Purchase Order but restored in Acknowledgement
+Severity: Warning
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Target: GR606F-LP (Match Group: 2437e214-f7cd-4ea8-9de0-b1be65f2dda7) ---
+Design: GR606F-LP (Qty=1)
+Order: ABSENT (Qty=None)
+Ack: ABSENT (Qty=None)
+Canonical SKU: GR606F-LP
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: PWS06DSPSS (Match Group: f126b7a7-5370-4f39-ab36-0e3ff21b6711) ---
+Design: PWS06DSPSS (Qty=1)
+Order: ABSENT (Qty=None)
+Ack: ABSENT (Qty=None)
+Canonical SKU: PWS06DSPSS
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: FILLER3 (Match Group: 31717110-23cb-44f8-beb8-c42cafc6f5a2) ---
+Design: ABSENT (Qty=None)
+Order: FILLER3 (Qty=1)
+Ack: ABSENT (Qty=None)
+Canonical SKU: FILLER3
+Status: EXTRA
+Discrepancy: item_presence (Critical): State transition: Design → Order (ADDED), Order → Ack (OMITTED). Extra item FILLER3 added in Purchase Order but not acknowledged by manufacturer
+Severity: Critical
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Target: FREIGHTSURCHARGE (Match Group: cdb1e251-ec35-4a26-aa5d-84c7dbe05b42) ---
+Design: ABSENT (Qty=None)
+Order: ABSENT (Qty=None)
+Ack: FREIGHTSURCHARGE (Qty=1)
+Canonical SKU: FREIGHTSURCHARGE
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Target: TARIFFSURCHARGE (Match Group: 9a237456-102b-4beb-b55c-ab057f04decb) ---
+Design: ABSENT (Qty=None)
+Order: ABSENT (Qty=None)
+Ack: TARIFFSURCHARGE (Qty=1)
+Canonical SKU: TARIFFSURCHARGE
+Status: MATCHED
+Discrepancy: None
+Severity: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+==================================================
+REMAINING UNCERTAIN AUDIT
+==================================================
+Total UNCERTAIN Groups: 0

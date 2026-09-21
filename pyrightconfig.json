@@ -1,0 +1,19 @@
+{
+  "extraPaths": [
+    "backend"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "backend"
+      ]
+    },
+    {
+      "root": "scratch",
+      "extraPaths": [
+        "../backend"
+      ]
+    }
+  ]
+}

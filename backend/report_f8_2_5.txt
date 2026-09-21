@@ -1,0 +1,315 @@
+==================================================
+REQUIRED FINAL METRICS
+==================================================
+Design items: 32
+Order items: 39
+Ack items: 57
+Total Match Groups: 72
+MATCHED: 18
+MISSING: 3
+EXTRA: 24
+CHANGED: 7
+UNCERTAIN: 20
+
+Discrepancies:
+CRITICAL: 0
+WARNING: 0
+INFO: 0
+Total discrepancies: 58
+Introduced ORDER: 23
+Introduced ACKNOWLEDGEMENT: 35
+
+Excluded:
+APPLIANCE: 6
+ARCHITECTURAL_ANNOTATION: 4
+COMMERCIAL_CHARGE: 0
+
+==================================================
+REQUIRED DETAILED CASES
+==================================================
+
+--- Match Group ID: 238cf33c-4e56-496d-8aa5-8c827ecda6fb ---
+Design: BT36B-2
+Order: ABSENT
+Ack: ABSENT
+Canonical SKU: BT36B-2
+Aggregate Qty: Design=2, Order=None, Ack=None (Final=2)
+Status: UNCERTAIN
+Discrepancy: item_presence (Warning): Drawing item (BT36B-2) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 9d5d9752-de82-4605-817a-c4fca149ce8e ---
+Design: ABSENT
+Order: BT36B-2
+Ack: ABSENT
+Canonical SKU: BT36B-2
+Aggregate Qty: Design=None, Order=1, Ack=None (Final=3)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): State transition: Design → Order (ADDED), Order → Ack (OMITTED). Extra item BT36B-2 added in Purchase Order but not acknowledged by manufacturer
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: d12aef36-7b34-4cd5-bb8c-db50cc76f11f ---
+Design: ABSENT
+Order: ABSENT
+Ack: BT36B-2
+Canonical SKU: BT36B-2
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=2)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): Extra line item BT36B-2 added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 04be10ec-1daa-4c2a-aee0-2d7f8bb675fa ---
+Design: W3930
+Order: W3930
+Ack: W3930
+Canonical SKU: W3930
+Aggregate Qty: Design=3, Order=2, Ack=1 (Final=2)
+Status: CHANGED
+Discrepancy: quantity (Warning): Quantity discrepancy: Design specifies 3, but Purchase Order requested 2
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 28014e61-d158-4eaf-8af4-135ea9cc6803 ---
+Design: WST3057B
+Order: ABSENT
+Ack: ABSENT
+Canonical SKU: WST3057B
+Aggregate Qty: Design=1, Order=None, Ack=None (Final=1)
+Status: UNCERTAIN
+Discrepancy: item_presence (Warning): Drawing item (WST3057B) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 5bb9022c-e0cc-4819-9851-e9c57de4d885 ---
+Design: ABSENT
+Order: WST3057B
+Ack: ABSENT
+Canonical SKU: WST3057B
+Aggregate Qty: Design=None, Order=2, Ack=None (Final=2)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): State transition: Design → Order (ADDED), Order → Ack (OMITTED). Extra item WST3057B added in Purchase Order but not acknowledged by manufacturer
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 5a030f69-bf10-4d5c-bc60-c17e463204a3 ---
+Design: ABSENT
+Order: ABSENT
+Ack: WST3057B
+Canonical SKU: WST3057B
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=2)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): Extra line item WST3057B added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: c0ab19d5-ae89-4eec-8060-f3b69789f5d6 ---
+Design: ABSENT
+Order: ABSENT
+Ack: WST3657B
+Canonical SKU: WST3657B
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=2)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): Extra line item WST3657B added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 69177394-732c-43e0-8a16-dd1271ee960d ---
+Design: WST3657B
+Order: WST3657B
+Ack: ABSENT
+Canonical SKU: WST3657B
+Aggregate Qty: Design=3, Order=3, Ack=None (Final=3)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 89e97c8a-0d68-4da4-98a1-b12a8f2b2380 ---
+Design: 24W3618B
+Order: 24W3618B
+Ack: 24W3618B
+Canonical SKU: 24W3618B
+Aggregate Qty: Design=2, Order=2, Ack=1 (Final=2)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 61e19c35-6d65-4152-8079-223dc2846cd4 ---
+Design: 24UT3693B-4
+Order: 24UT3693B-4
+Ack: 24UT3693B-4
+Canonical SKU: 24UT3693B-4
+Aggregate Qty: Design=2, Order=2, Ack=1 (Final=2)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 09a7ac83-e9eb-4817-a4df-2e96ddb63611 ---
+Design: BT18-2-L
+Order: BT18-2-L
+Ack: ABSENT
+Canonical SKU: BT18-2-L
+Aggregate Qty: Design=1, Order=1, Ack=None (Final=1)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 80ebb9e2-d0f4-485b-8a7b-1d5d1e5cca87 ---
+Design: BT18-2-R
+Order: BT18-2-R
+Ack: ABSENT
+Canonical SKU: BT18-2-R
+Aggregate Qty: Design=1, Order=1, Ack=None (Final=1)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 98a3d958-ab24-42d8-adb3-ce031705db87 ---
+Design: BFHC12
+Order: BFHC12
+Ack: BPFHC12
+Canonical SKU: BPFHC12
+Aggregate Qty: Design=1, Order=1, Ack=1 (Final=1)
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'BPFHC12' corresponds to 'BFHC12'
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 91d21348-ae77-4e97-a0d5-778f62450dab ---
+Design: BPS12
+Order: BPS12
+Ack: ABSENT
+Canonical SKU: BPS12
+Aggregate Qty: Design=1, Order=1, Ack=None (Final=1)
+Status: MATCHED
+Discrepancy: None
+Introduced At: N/A
+Reason: RESOLVED_AUTO
+
+--- Match Group ID: 3a50f8f7-787a-4719-be44-41fdeed8bf1b ---
+Design: ABSENT
+Order: ABSENT
+Ack: BP52
+Canonical SKU: BP52
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=1)
+Status: EXTRA
+Discrepancy: item_presence (Critical): Extra line item BP52 added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 5afbcbc2-b3fa-4b02-88b2-14474d384cbe ---
+Design: B18DWB
+Order: B18DWB
+Ack: B18BWD18
+Canonical SKU: B18BWD18
+Aggregate Qty: Design=1, Order=1, Ack=1 (Final=1)
+Status: CHANGED
+Discrepancy: sku (Info): Manufacturer SKU variant in Acknowledgement: 'B18BWD18' corresponds to 'B18DWB'
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 1bd86ea5-b30d-491b-8a82-9fa67a8e5dd0 ---
+Design: SBA36B
+Order: ABSENT
+Ack: ABSENT
+Canonical SKU: SBA36B
+Aggregate Qty: Design=1, Order=None, Ack=None (Final=1)
+Status: UNCERTAIN
+Discrepancy: item_presence (Warning): Drawing item (SBA36B) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 507de58d-b6eb-4046-8e3f-9a7bf8530a54 ---
+Design: ABSENT
+Order: SBA36B
+Ack: ABSENT
+Canonical SKU: SBA36B
+Aggregate Qty: Design=None, Order=1, Ack=None (Final=1)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): State transition: Design → Order (ADDED), Order → Ack (OMITTED). Extra item SBA36B added in Purchase Order but not acknowledged by manufacturer
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 47e6b584-eae0-4121-9834-262c025a28b9 ---
+Design: ABSENT
+Order: ABSENT
+Ack: SB36B3
+Canonical SKU: SB36B3
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=1)
+Status: UNCERTAIN
+Discrepancy: item_presence (Critical): Extra line item SB36B3 added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: d688ca80-c68d-4e2b-9995-06ad37380893 ---
+Design: 21AHSDX7230
+Order: ABSENT
+Ack: 21AHSDX7230
+Canonical SKU: 21AHSDX7230
+Aggregate Qty: Design=1, Order=None, Ack=1 (Final=1)
+Status: CHANGED
+Discrepancy: item_presence (Warning): State transition: Design → Order (OMITTED), Order → Ack (RESTORED). SKU 21AHSDX7230 present in Design was omitted in Purchase Order but restored in Acknowledgement
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 19ca3c7f-f8e8-4291-bad7-deadacad7fa7 ---
+Design: GR606F-LP
+Order: ABSENT
+Ack: ABSENT
+Canonical SKU: GR606F-LP
+Aggregate Qty: Design=1, Order=None, Ack=None (Final=1)
+Status: MISSING
+Discrepancy: item_presence (Warning): Drawing item (GR606F-LP) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 0fecf090-352a-42d4-9bdc-e32bae0714ef ---
+Design: PWS06DSPSS
+Order: ABSENT
+Ack: ABSENT
+Canonical SKU: PWS06DSPSS
+Aggregate Qty: Design=1, Order=None, Ack=None (Final=1)
+Status: MISSING
+Discrepancy: item_presence (Warning): Drawing item (PWS06DSPSS) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: d3ed0eec-14fd-4609-8e5a-6c3c7419ad2e ---
+Design: ABSENT
+Order: FILLER3
+Ack: ABSENT
+Canonical SKU: FILLER3
+Aggregate Qty: Design=None, Order=1, Ack=None (Final=1)
+Status: EXTRA
+Discrepancy: item_presence (Critical): State transition: Design → Order (ADDED), Order → Ack (OMITTED). Extra item FILLER3 added in Purchase Order but not acknowledged by manufacturer
+Introduced At: ORDER
+Reason: PENDING_REVIEW
+
+--- Match Group ID: d4e4e7d0-4575-4d3f-b6bc-8544267e704d ---
+Design: ABSENT
+Order: ABSENT
+Ack: FREIGHTSURCHARGE
+Canonical SKU: FREIGHTSURCHARGE
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=1)
+Status: EXTRA
+Discrepancy: item_presence (Critical): Extra line item FREIGHTSURCHARGE added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
+
+--- Match Group ID: 63777657-53b3-4b4f-b848-d3644a874855 ---
+Design: ABSENT
+Order: ABSENT
+Ack: TARIFFSURCHARGE
+Canonical SKU: TARIFFSURCHARGE
+Aggregate Qty: Design=None, Order=None, Ack=1 (Final=1)
+Status: EXTRA
+Discrepancy: item_presence (Critical): Extra line item TARIFFSURCHARGE added in Acknowledgement not requested in Purchase Order or Design
+Introduced At: ACKNOWLEDGEMENT
+Reason: PENDING_REVIEW
