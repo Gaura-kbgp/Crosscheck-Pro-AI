@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Discrepancy, MatchGroup, ReviewActionType } from "@/lib/api/types";
+import React, { useState, useEffect } from "react";
+import { Discrepancy, MatchGroup, ReviewActionType, SourceEvidence, CabinetClassification } from "@/lib/api/types";
 import { X, ArrowRight, CheckCircle, XCircle, AlertTriangle, MessageSquareWarning, Edit3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ interface ReviewDetailDrawerProps {
   projectId: string;
   isOpen: boolean;
   onClose: () => void;
+  /** Advances to the next finding in the current list (or closes if none). Called after an action resolves this one, so a reviewer can move through the queue without clicking. */
+  onNext?: () => void;
   readOnly?: boolean;
 }
 
@@ -25,27 +27,58 @@ export function ReviewDetailDrawer({
   projectId,
   isOpen,
   onClose,
+  onNext,
   readOnly = false,
 }: ReviewDetailDrawerProps) {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const actionMutation = useReviewAction(projectId);
 
-  if (!isOpen || !discrepancy || !group) return null;
-
-  const handleAction = async (action: ReviewActionType, reason?: string) => {
+  const handleAction = React.useCallback(async (action: ReviewActionType, reason?: string) => {
+    if (!discrepancy) return;
     try {
       await actionMutation.mutateAsync({
         discrepancyId: discrepancy.id,
         data: { action, reason },
       });
       toast.success(`Discrepancy marked as ${action.replace(/_/g, " ")}`);
-      if (action === "ACCEPT_FINDING" || action === "FALSE_POSITIVE") {
-        onClose();
+      if (action === "ACCEPT_FINDING" || action === "FALSE_POSITIVE" || action === "ESCALATE") {
+        (onNext || onClose)();
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to perform review action");
     }
-  };
+  }, [discrepancy, actionMutation, onNext, onClose]);
+
+  // Keyboard shortcuts: A = Accept, F = False Positive, E = Escalate — lets a
+  // reviewer move through the open findings queue without clicking each time.
+  useEffect(() => {
+    if (!isOpen || readOnly || overrideOpen) return;
+    if (discrepancy?.status === "ACCEPTED" || discrepancy?.status === "FALSE_POSITIVE") return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isTyping || e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        handleAction("ACCEPT_FINDING");
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        const reason = window.prompt("Reason for marking as false positive:");
+        if (reason !== null) handleAction("FALSE_POSITIVE", reason);
+      } else if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        const reason = window.prompt("Reason for escalation:");
+        if (reason !== null) handleAction("ESCALATE", reason);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, readOnly, overrideOpen, discrepancy, handleAction]);
+
+  if (!isOpen || !discrepancy || !group) return null;
 
   const getSeverityColor = (sev: string) => {
     switch (sev) {
@@ -115,11 +148,11 @@ export function ReviewDetailDrawer({
               {/* 3-way Comparison */}
               <div className="p-5 overflow-x-auto">
                 <div className="flex items-start gap-4 min-w-max">
-                  <ValueBlock label="Design" value={discrepancy.design_value} />
+                  <ValueBlock label="Design" value={discrepancy.design_value} evidence={group.design_item?.source_metadata?.evidence} cabinetClassification={group.design_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
-                  <ValueBlock label="Order" value={discrepancy.order_value} />
+                  <ValueBlock label="Order" value={discrepancy.order_value} evidence={group.order_item?.source_metadata?.evidence} cabinetClassification={group.order_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
-                  <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} />
+                  <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
                 </div>
               </div>
             </div>
@@ -127,11 +160,18 @@ export function ReviewDetailDrawer({
             {/* Review Actions (only if not readOnly and not fully resolved, though we can allow override always if needed, but usually we hide/disable if readOnly) */}
             {!readOnly && discrepancy.status !== "ACCEPTED" && discrepancy.status !== "FALSE_POSITIVE" && (
               <div className="bg-white rounded-xl border border-[#DCE6F0] shadow-2xs p-5 space-y-4">
-                <h3 className="text-sm font-bold text-[#0F2747] uppercase tracking-wider mb-2">Review Actions</h3>
-                
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-bold text-[#0F2747] uppercase tracking-wider">Review Actions</h3>
+                  <span className="text-[11px] text-[#58708F] font-medium">
+                    Shortcuts: <kbd className="px-1 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono">A</kbd> Accept ·{" "}
+                    <kbd className="px-1 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono">F</kbd> False Positive ·{" "}
+                    <kbd className="px-1 py-0.5 bg-slate-100 rounded border border-slate-200 font-mono">E</kbd> Escalate
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="justify-start gap-2 h-auto py-3 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
                     onClick={() => handleAction("ACCEPT_FINDING")}
                     isLoading={actionMutation.isPending}
@@ -225,7 +265,7 @@ export function ReviewDetailDrawer({
   );
 }
 
-function ValueBlock({ label, value }: { label: string; value: string | null | undefined }) {
+function ValueBlock({ label, value, evidence, cabinetClassification }: { label: string; value: string | null | undefined; evidence?: SourceEvidence | null; cabinetClassification?: CabinetClassification | null }) {
   const displayVal = formatDisplayValue(value);
   const isMissing = displayVal === "—" || displayVal === "" || !value || value === "null";
   return (
@@ -237,6 +277,61 @@ function ValueBlock({ label, value }: { label: string; value: string | null | un
       )}>
         {isMissing ? "Not specified" : displayVal}
       </div>
+      {/* F8.3 Phase 2/3: minimal source traceability — page number + whether the
+          extracted value was verified (single-source page-text match, or
+          Phase 3 two-source OCR+Vision agreement). */}
+      {evidence && (evidence.page_number || evidence.status) && (
+        <div
+          className={cn(
+            "mt-1 text-[10px] font-medium truncate",
+            evidence.status === "VERIFIED" ? "text-emerald-600" : "text-amber-600"
+          )}
+          title={evidence.source_text || undefined}
+        >
+          {evidence.page_number ? `Page ${evidence.page_number}` : "Source"} · {evidence.status === "VERIFIED" ? "verified" : "unverified"}
+        </div>
+      )}
+      {/* F8.3 Phase 3: explicit OCR vs Vision conflict — both raw readings shown, never silently picked. */}
+      {evidence?.verification?.conflicts && evidence.verification.conflicts.length > 0 && (
+        <div className="mt-1.5 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800 space-y-0.5">
+          <div className="font-bold flex items-center gap-1">⚠ Extraction conflict</div>
+          {evidence.verification.conflicts.map((c, i) => (
+            <div key={i} className="truncate">
+              <span className="font-semibold">{c.field}:</span> OCR={String(c.ocr_value)} / Vision={String(c.vision_value)}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Cabinet Code Intelligence: concise reason for the category/confidence
+          decision — never raw model reasoning, just the reason codes (§27). */}
+      {cabinetClassification && (cabinetClassification.confidence_level === "HIGH" || cabinetClassification.confidence_level === "UNCERTAIN" || !cabinetClassification.is_cabinet_candidate) && (
+        <div
+          className={cn(
+            "mt-1.5 rounded border p-1.5 text-[10px] space-y-0.5",
+            cabinetClassification.confidence_level === "HIGH"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : cabinetClassification.confidence_level === "UNCERTAIN"
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-slate-200 bg-slate-50 text-slate-600"
+          )}
+        >
+          <div className="font-bold flex items-center gap-1">
+            {cabinetClassification.confidence_level === "HIGH" ? "✓" : cabinetClassification.confidence_level === "UNCERTAIN" ? "⚠" : "ℹ"}{" "}
+            {cabinetClassification.classification}
+            {!cabinetClassification.is_cabinet_candidate ? " (excluded)" : ""}
+          </div>
+          {cabinetClassification.reason_codes && cabinetClassification.reason_codes.length > 0 && (
+            <div className="truncate" title={cabinetClassification.reason_codes.join(", ")}>
+              {cabinetClassification.reason_codes.join(", ")}
+            </div>
+          )}
+          {cabinetClassification.candidate_variants && cabinetClassification.candidate_variants.length > 1 && (
+            <div className="truncate" title={cabinetClassification.candidate_variants.join(" / ")}>
+              Variants: {cabinetClassification.candidate_variants.join(" / ")}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

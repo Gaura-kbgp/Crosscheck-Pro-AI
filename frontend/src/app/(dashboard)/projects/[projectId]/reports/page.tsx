@@ -1,7 +1,8 @@
 "use client";
 
-import React, { use } from "react";
+import React from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useProject } from "@/lib/hooks/use-projects";
 import { ReportSummary } from "@/components/reports/report-summary";
 import { ReportHistoryList } from "@/components/reports/report-history-list";
@@ -10,13 +11,9 @@ import { ProjectStatusBadge } from "@/components/badges/status-badge";
 import { ErrorState } from "@/components/feedback/error-state";
 import { Button } from "@/components/ui/button";
 
-export default function ReportsPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
-  const resolvedParams = use(params);
-  const projectId = resolvedParams.projectId;
+export default function ReportsPage() {
+  const params = useParams();
+  const projectId = (params?.projectId as string) || "";
 
   const { data: project, isLoading: isProjectLoading, error: projectError, refetch: refetchProject } = useProject(projectId);
 

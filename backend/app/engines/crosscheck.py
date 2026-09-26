@@ -24,6 +24,24 @@ def _get_item_qty(item: Optional[CanonicalLineItem]) -> Optional[int]:
     return item.quantity
 
 
+_PRESENT_LIKE_TOKENS = {"PRESENT", "ADDED", "RESTORED"}
+
+
+def _attribute_introduced_at(design_state: str, order_state: str, ack_state: str) -> DocumentType:
+    """
+    Deterministic 3-way state-transition attribution for item_presence
+    discrepancies: Design -> Order -> Acknowledgement. Attributed to the
+    FIRST document in which the canonical item actually exists, regardless
+    of whether a later document omits it. Never inferred/guessed — a pure
+    lookup over the same presence tokens already recorded in source_values.
+    """
+    if design_state in _PRESENT_LIKE_TOKENS:
+        return DocumentType.DESIGN
+    if order_state in _PRESENT_LIKE_TOKENS:
+        return DocumentType.ORDER
+    return DocumentType.ACKNOWLEDGEMENT
+
+
 CATEGORY_DISCREPANCY_POLICY: Dict[ItemCategory, bool] = {
     ItemCategory.CABINET: True,
     ItemCategory.PANEL: True,
@@ -110,7 +128,7 @@ class CrossCheckEngine:
                 mg, project_id, organization_id, "item_presence",
                 {"design": "PRESENT", "order": "MISSING", "acknowledgement": "MISSING"},
                 {"expected": "PRESENT", "actual": "MISSING"},
-                DocumentType.ORDER,
+                _attribute_introduced_at("PRESENT", "MISSING", "MISSING"),
                 sev,
                 exp
             ))
@@ -122,7 +140,7 @@ class CrossCheckEngine:
                 mg, project_id, organization_id, "item_presence",
                 {"design": "PRESENT", "order": "OMITTED", "acknowledgement": "RESTORED"},
                 {"design_to_order": "OMITTED", "order_to_ack": "RESTORED"},
-                DocumentType.ORDER,
+                _attribute_introduced_at("PRESENT", "OMITTED", "RESTORED"),
                 Severity.WARNING,
                 f"State transition: Design → Order (OMITTED), Order → Ack (RESTORED). SKU {d_item.raw_sku} present in Design was omitted in Purchase Order but restored in Acknowledgement"
             ))
@@ -139,7 +157,7 @@ class CrossCheckEngine:
                 mg, project_id, organization_id, "item_presence",
                 {"design": "ABSENT", "order": "ADDED", "acknowledgement": "OMITTED"},
                 {"design_to_order": "ADDED", "order_to_ack": "OMITTED"},
-                DocumentType.ORDER,
+                _attribute_introduced_at("ABSENT", "ADDED", "OMITTED"),
                 sev,
                 exp
             ))
@@ -157,7 +175,7 @@ class CrossCheckEngine:
                 mg, project_id, organization_id, "item_presence",
                 {"design": "ABSENT", "order": "PRESENT", "acknowledgement": "PRESENT"},
                 {"expected": "ABSENT", "actual": "PRESENT"},
-                DocumentType.ORDER,
+                _attribute_introduced_at("ABSENT", "PRESENT", "PRESENT"),
                 sev,
                 exp
             ))
@@ -174,7 +192,7 @@ class CrossCheckEngine:
                 mg, project_id, organization_id, "item_presence",
                 {"design": "ABSENT", "order": "ABSENT", "acknowledgement": "PRESENT"},
                 {"expected": "ABSENT", "actual": "PRESENT"},
-                DocumentType.ACKNOWLEDGEMENT,
+                _attribute_introduced_at("ABSENT", "ABSENT", "PRESENT"),
                 sev,
                 exp
             ))

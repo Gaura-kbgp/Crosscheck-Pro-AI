@@ -262,7 +262,9 @@ class TestThreeWayStateTransitions:
         discs = crosscheck.evaluate(mgs, self.proj_id, self.org_id)
 
         assert len(discs) == 1
-        assert discs[0].introduced_at == DocumentType.ORDER
+        # Deterministic 3-way attribution: Design is the first source where
+        # the item exists, so that's where it's introduced.
+        assert discs[0].introduced_at == DocumentType.DESIGN
         assert discs[0].severity == Severity.WARNING
         assert "OMITTED" in discs[0].explanation
         assert "RESTORED" in discs[0].explanation

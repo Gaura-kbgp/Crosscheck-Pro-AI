@@ -1,7 +1,8 @@
 import uuid
-from typing import List, Any
+from typing import List, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.api.dependencies import get_db, get_current_user, RequireRole
 from app.models.core import User, Role, AuditLog
 from app.services.review_service import ReviewService
@@ -9,6 +10,9 @@ from app.schemas.review import ReviewActionRequest, DiscrepancyResponse, MatchGr
 from app.schemas.project import ProjectResponse
 
 router = APIRouter()
+
+class BulkAcceptRequest(BaseModel):
+    reason: Optional[str] = None
 
 @router.post("/discrepancies/{discrepancy_id}/review")
 def review_discrepancy(
@@ -57,6 +61,22 @@ def review_discrepancy(
         return {"status": "success", "match_group_id": str(res.id)}
     else:
         raise HTTPException(status_code=400, detail="Invalid review action")
+
+@router.post("/projects/{project_id}/discrepancies/bulk-accept")
+def bulk_accept_non_critical(
+    project_id: uuid.UUID,
+    request: BulkAcceptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RequireRole([Role.ADMIN, Role.REVIEWER]))
+):
+    """
+    Accepts every OPEN, non-CRITICAL discrepancy on the project in one call.
+    Critical findings always need individual review and are never touched here.
+    """
+    discs = ReviewService.bulk_accept_non_critical(
+        db, project_id, current_user.organization_id, current_user.user_id, request.reason
+    )
+    return {"status": "success", "accepted_count": len(discs)}
 
 @router.post("/projects/{project_id}/finalize", response_model=ProjectResponse)
 def finalize_project(

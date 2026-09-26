@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List
@@ -16,11 +16,21 @@ router = APIRouter()
 def start_processing(
     project_id: UUID,
     background_tasks: BackgroundTasks,
+    force_reprocess: bool = Query(False, description="F8.3 Phase 3: bypass extraction idempotency and re-extract every document even if an identical prior attempt exists."),
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(get_current_user)
 ):
     service = ProcessingService(db)
-    return service.start_processing(project_id, current_user.organization_id, background_tasks)
+    return service.start_processing(project_id, current_user.organization_id, background_tasks, force_reprocess)
+
+@router.get("/projects/{project_id}/jobs/latest", response_model=ProcessingJobResponse)
+def get_latest_job(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    service = ProcessingService(db)
+    return service.get_latest_job(project_id, current_user.organization_id)
 
 @router.get("/jobs/{job_id}/status", response_model=ProcessingJobResponse)
 def get_job_status(
@@ -30,6 +40,15 @@ def get_job_status(
 ):
     service = ProcessingService(db)
     return service.get_job_status(job_id, current_user.organization_id)
+
+@router.post("/jobs/{job_id}/cancel", response_model=ProcessingJobResponse)
+def cancel_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(get_current_user)
+):
+    service = ProcessingService(db)
+    return service.cancel_job(job_id, current_user.organization_id)
 
 @router.get("/documents/{document_id}/extraction", response_model=ExtractionResponse)
 def get_document_extraction(

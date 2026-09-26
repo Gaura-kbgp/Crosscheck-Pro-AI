@@ -13,7 +13,7 @@ class ProjectRepository:
     def get_by_id_and_org(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> Optional[Project]:
         stmt = (
             select(Project)
-            .options(selectinload(Project.documents))
+            .options(selectinload(Project.documents), selectinload(Project.manufacturer))
             .where(
                 Project.id == project_id,
                 Project.organization_id == organization_id
@@ -24,7 +24,7 @@ class ProjectRepository:
     def list_by_org(self, organization_id: uuid.UUID) -> List[Project]:
         stmt = (
             select(Project)
-            .options(selectinload(Project.documents))
+            .options(selectinload(Project.documents), selectinload(Project.manufacturer))
             .where(Project.organization_id == organization_id)
             .order_by(Project.updated_at.desc())
         )

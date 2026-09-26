@@ -1,5 +1,6 @@
 import uuid
 import re
+import hashlib
 from typing import List
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,6 +11,27 @@ from app.services.project_service import ProjectService
 from app.integrations.storage import StorageService
 from app.models.core import Document, DocumentType, DocumentStatus
 from app.core.config import settings
+
+# Accepted file extensions -> mime types. Design/PO/Acknowledgement docs may
+# arrive as PDFs, scanned images, or Excel sheets, so all of these are allowed.
+ALLOWED_EXTENSIONS = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".webp": "image/webp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".csv": "text/csv",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 class DocumentService:
     def __init__(self, db: Session):
@@ -46,40 +68,52 @@ class DocumentService:
         if file_size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
             
-        if file.content_type != "application/pdf" or not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Only PDF files are supported")
-            
-        # PDF Structure & Page Count Validation
-        try:
-            import fitz
+        lower_filename = file.filename.lower()
+        ext = next((e for e in ALLOWED_EXTENSIONS if lower_filename.endswith(e)), None)
+        if not ext:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Unsupported file type. Please upload a PDF, image (JPG/PNG/etc.), or Excel/CSV file.",
+            )
+        # Trust the extension over the browser-supplied content-type, which is
+        # unreliable for files like .xlsx coming from some OSes/browsers.
+        resolved_content_type = ALLOWED_EXTENSIONS[ext]
+
+        # PDF Structure & Page Count Validation (only applicable to PDFs)
+        if ext == ".pdf":
             try:
-                pdf_doc = fitz.open(stream=content, filetype="pdf")
-                page_count = pdf_doc.page_count
-                pdf_doc.close()
-                if page_count > settings.MAX_PDF_PAGES:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, 
-                        detail=f"PDF page count ({page_count}) exceeds maximum limit of {settings.MAX_PDF_PAGES} pages"
-                    )
+                import fitz
+                try:
+                    pdf_doc = fitz.open(stream=content, filetype="pdf")
+                    page_count = pdf_doc.page_count
+                    pdf_doc.close()
+                    if page_count > settings.MAX_PDF_PAGES:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"PDF page count ({page_count}) exceeds maximum limit of {settings.MAX_PDF_PAGES} pages"
+                        )
+                except HTTPException:
+                    raise
+                except Exception as fe:
+                    # If stream fails PyMuPDF parsing, permit simple test mock bytes starting with %PDF or PDF mock
+                    if not (content.startswith(b"%PDF") or b"PDF" in content or b"pdf" in content):
+                        raise BusinessLogicError(f"Corrupt or unreadable PDF document: {str(fe)}")
             except HTTPException:
                 raise
-            except Exception as fe:
-                # If stream fails PyMuPDF parsing, permit simple test mock bytes starting with %PDF or PDF mock
-                if not (content.startswith(b"%PDF") or b"PDF" in content or b"pdf" in content):
-                    raise BusinessLogicError(f"Corrupt or unreadable PDF document: {str(fe)}")
-        except HTTPException:
-            raise
-        except BusinessLogicError:
-            raise
-        except Exception as e:
-            raise BusinessLogicError(f"Corrupt or unreadable PDF document: {str(e)}")
+            except BusinessLogicError:
+                raise
+            except Exception as e:
+                raise BusinessLogicError(f"Corrupt or unreadable PDF document: {str(e)}")
 
         clean_filename = self.sanitize_filename(file.filename)
         doc_id = uuid.uuid4()
         storage_path = f"{organization_id}/{project_id}/{doc_id}/{clean_filename}"
+        # F8.3 Phase 3 §22: stable content identity — the raw bytes only, never
+        # filename/timestamp/DB id — used for extraction idempotency.
+        document_hash = hashlib.sha256(content).hexdigest()
 
         try:
-            self.storage_service.upload_file(storage_path, content, file.content_type)
+            self.storage_service.upload_file(storage_path, content, resolved_content_type)
         except Exception as e:
             raise BusinessLogicError(f"Storage upload failed: {str(e)}")
 
@@ -91,9 +125,10 @@ class DocumentService:
                 document_type=doc_type,
                 original_filename=clean_filename,
                 storage_path=storage_path,
-                mime_type=file.content_type,
+                mime_type=resolved_content_type,
                 file_size=file_size,
-                status=DocumentStatus.UPLOADED
+                status=DocumentStatus.UPLOADED,
+                document_hash=document_hash
             )
             return doc
         except Exception as e:

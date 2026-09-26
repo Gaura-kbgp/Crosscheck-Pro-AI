@@ -67,6 +67,10 @@ logs/
 scratch/
 tmp/
 temp/
+.claude/
+report_*.txt
+reprocess_*.txt
+audit_*.txt
 
 # ------------------------------------------
 # Coverage

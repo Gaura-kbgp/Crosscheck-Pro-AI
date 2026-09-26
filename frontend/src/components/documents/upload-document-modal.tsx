@@ -60,21 +60,42 @@ export function UploadDocumentModal({
     }
   }, [open, defaultProjectId, projects, selectedProjectId]);
 
+  const ACCEPTED_EXTENSIONS = [
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".xls",
+    ".xlsx",
+    ".csv",
+    ".txt",
+    ".md",
+    ".doc",
+    ".docx",
+  ];
+
   const handleFileChange = (file: File | null) => {
     setErrorMessage(null);
     if (!file) {
       setSelectedFile(null);
       return;
     }
-    // PDF validation
-    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      setErrorMessage("Unsupported file format. Please upload a PDF file.");
+    // File type validation
+    const lowerName = file.name.toLowerCase();
+    const isAccepted = ACCEPTED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+    if (!isAccepted) {
+      setErrorMessage("Unsupported file format. Please upload a PDF, image, or Excel/CSV file.");
       return;
     }
     // File size validation (50 MB)
-    const maxBytes = 50 * 1024 * 1024;
+    const maxBytes = 200 * 1024 * 1024;
     if (file.size > maxBytes) {
-      setErrorMessage("File exceeds the maximum size limit of 50 MB.");
+      setErrorMessage("File exceeds the maximum size limit of 200 MB.");
       return;
     }
 
@@ -151,7 +172,7 @@ export function UploadDocumentModal({
           </DialogTitle>
         </div>
         <DialogDescription>
-          Upload Design PDF, Purchase Order, or Manufacturer Acknowledgement for automated cross-checking.
+          Upload Design, Purchase Order, or Manufacturer Acknowledgement (PDF, image, or Excel/CSV) for automated cross-checking.
         </DialogDescription>
       </DialogHeader>
 
@@ -251,9 +272,9 @@ export function UploadDocumentModal({
             {/* Step 3: Drag & Drop PDF */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-[#0F2747] flex items-center justify-between">
-                <span>Upload PDF Document</span>
+                <span>Upload Document</span>
                 <span className="text-[11px] font-normal text-[#58708F]">
-                  PDF only (Max 50 MB)
+                  Any file type (Max 200 MB)
                 </span>
               </label>
 
@@ -272,7 +293,7 @@ export function UploadDocumentModal({
               >
                 <input
                   type="file"
-                  accept=".pdf,application/pdf"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tif,.tiff,.xls,.xlsx,.csv,.txt,.md,.doc,.docx"
                   onChange={(e) =>
                     handleFileChange(e.target.files ? e.target.files[0] : null)
                   }
@@ -311,10 +332,10 @@ export function UploadDocumentModal({
                       <Upload className="h-5 w-5" />
                     </div>
                     <p className="text-xs font-semibold text-[#0F2747]">
-                      Click to browse or drag & drop PDF
+                      Click to browse or drag & drop a file
                     </p>
                     <p className="text-[11px] text-[#58708F] mt-0.5">
-                      Supports Design CAD drawings, Purchase Orders, and Factory Acknowledgements
+                      Supports PDF, images (JPG/PNG/etc.), and Excel/CSV for Design drawings, Purchase Orders, and Factory Acknowledgements
                     </p>
                   </>
                 )}

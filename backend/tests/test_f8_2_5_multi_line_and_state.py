@@ -229,7 +229,10 @@ def test_9_design_order_omission_ack_restoration(matching_engine, crosscheck_eng
     discrepancies = crosscheck_engine.evaluate(mgs, proj_id, org_id)
     presence_discrepancies = [d for d in discrepancies if d.field == "item_presence"]
     assert len(presence_discrepancies) == 1
-    assert presence_discrepancies[0].introduced_at == DocumentType.ORDER
+    # Deterministic 3-way attribution: Design is the first source where the
+    # item exists, so that's where it's introduced — even though the Order
+    # stage is where it was (temporarily) omitted.
+    assert presence_discrepancies[0].introduced_at == DocumentType.DESIGN
     assert presence_discrepancies[0].severity == Severity.WARNING
     assert "OMITTED" in presence_discrepancies[0].explanation
     assert "RESTORED" in presence_discrepancies[0].explanation

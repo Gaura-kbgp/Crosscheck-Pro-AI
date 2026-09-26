@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, case
 from app.core.exceptions import ResourceNotFoundError
@@ -7,11 +7,24 @@ from app.core.exceptions import ResourceNotFoundError
 from app.repositories.project_repository import ProjectRepository
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.models.core import Project, Discrepancy, ProjectStatus
+from app.services.manufacturer_service import ManufacturerService
 
 class ProjectService:
     def __init__(self, db: Session):
         self.db = db
         self.repository = ProjectRepository(db)
+
+    def _assert_manufacturer_visible(self, manufacturer_id: Optional[uuid.UUID], organization_id: uuid.UUID) -> None:
+        """A project's manufacturer_id must be a manufacturer this org can
+        actually see (global, or its own) — otherwise a project could be
+        linked to another organization's PRIVATE manufacturer dictionary by
+        guessing its id, leaking that dictionary into this org's Cabinet
+        Code Intelligence classification results. Raises ResourceNotFoundError
+        (404, never 403) if not visible, so the id's existence is never
+        confirmed to an org that can't see it."""
+        if manufacturer_id is None:
+            return
+        ManufacturerService(self.db)._get_visible(manufacturer_id, organization_id)
 
     def _enrich_single_project(self, project: Project) -> ProjectResponse:
         docs = project.documents or []
@@ -61,6 +74,8 @@ class ProjectService:
             name=project.name,
             customer_name=project.customer_name,
             dealer_name=project.dealer_name,
+            manufacturer_id=project.manufacturer_id,
+            manufacturer_name=project.manufacturer.name if project.manufacturer else None,
             status=project.status,
             document_count=doc_count,
             uploaded_document_types=doc_types,
@@ -137,6 +152,8 @@ class ProjectService:
                     name=p.name,
                     customer_name=p.customer_name,
                     dealer_name=p.dealer_name,
+                    manufacturer_id=p.manufacturer_id,
+                    manufacturer_name=p.manufacturer.name if p.manufacturer else None,
                     status=p.status,
                     document_count=doc_count,
                     uploaded_document_types=doc_types,
@@ -150,6 +167,7 @@ class ProjectService:
         return results
 
     def create_project(self, organization_id: uuid.UUID, project_in: ProjectCreate) -> ProjectResponse:
+        self._assert_manufacturer_visible(project_in.manufacturer_id, organization_id)
         project = self.repository.create(organization_id, project_in)
         return self._enrich_single_project(project)
 
@@ -157,6 +175,8 @@ class ProjectService:
         project = self.repository.get_by_id_and_org(project_id, organization_id)
         if not project:
             raise ResourceNotFoundError(message="Project not found")
+        if "manufacturer_id" in update_in.model_fields_set:
+            self._assert_manufacturer_visible(update_in.manufacturer_id, organization_id)
         updated = self.repository.update(project, update_in)
         return self._enrich_single_project(updated)
 

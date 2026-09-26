@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     
     # Storage
     SUPABASE_STORAGE_BUCKET: str = "documents"
-    MAX_UPLOAD_SIZE_MB: int = 10
+    MAX_UPLOAD_SIZE_MB: int = 200
     
     # AI Provider
     AI_PROVIDER: str = "openai" # "openai" or "gemini"
@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     AUTH_RATE_WINDOW_SECONDS: int = 60
     PASSWORD_RESET_RATE_LIMIT: int = 5
     PASSWORD_RESET_RATE_WINDOW_SECONDS: int = 300
+    # Step 3 production audit: manufacturer/spec-book/NKBA file uploads had
+    # no rate limiting at all, unlike auth — a generic per-IP upload limiter
+    # to prevent abuse via repeated large-file or bulk-import requests.
+    UPLOAD_RATE_LIMIT: int = 20
+    UPLOAD_RATE_WINDOW_SECONDS: int = 300
     MAX_PDF_PAGES: int = 100
 
     @property

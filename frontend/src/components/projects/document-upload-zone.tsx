@@ -18,20 +18,41 @@ export function DocumentUploadZone({
   isLoading = false,
   disabled = false,
   className,
-  accept = ".pdf,application/pdf",
-  maxSizeMB = 10,
+  accept = ".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tif,.tiff,.xls,.xlsx,.csv,.txt,.md,.doc,.docx",
+  maxSizeMB = 200,
 }: DocumentUploadZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const ACCEPTED_EXTENSIONS = [
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".xls",
+    ".xlsx",
+    ".csv",
+    ".txt",
+    ".md",
+    ".doc",
+    ".docx",
+  ];
+
   const validateAndProcessFile = async (file: File) => {
     setError(null);
 
     // Validate type
-    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      setError("Only PDF files are supported.");
+    const lowerName = file.name.toLowerCase();
+    const isAccepted = ACCEPTED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+    if (!isAccepted) {
+      setError("Unsupported file format. Please upload a PDF, image, or Excel/CSV file.");
       return;
     }
 
@@ -146,14 +167,14 @@ export function DocumentUploadZone({
         </div>
 
         <p className="text-xs font-semibold text-[#0F2747]">
-          Drop your PDF here
+          Drop your file here
         </p>
         <p className="text-[11px] text-[#58708F] mt-0.5">
           or <span className="font-semibold text-[#0284C7] hover:underline">browse from your computer</span>
         </p>
 
         <span className="mt-3 inline-block rounded-full bg-[#F7F9FC] px-2.5 py-0.5 text-[10px] font-medium text-[#58708F] border border-[#DCE6F0]">
-          PDF up to {maxSizeMB} MB
+          Any file type up to {maxSizeMB} MB
         </span>
       </div>
 

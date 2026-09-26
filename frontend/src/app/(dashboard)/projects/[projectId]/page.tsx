@@ -1,7 +1,8 @@
 "use client";
 
-import React, { use, useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useProject } from "@/lib/hooks/use-projects";
 import {
   useProjectDocuments,
@@ -9,6 +10,8 @@ import {
   useDeleteDocument,
   useStartProcessing,
   useJobStatus,
+  useCancelJob,
+  useLatestJob,
 } from "@/lib/hooks/use-documents";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { ProjectDetailHeader } from "@/components/projects/project-detail-header";
@@ -20,13 +23,9 @@ import { ErrorState } from "@/components/feedback/error-state";
 import { DocumentType, ProcessingJobResponse } from "@/lib/api/types";
 import { ArrowLeft, AlertCircle } from "lucide-react";
 
-export default function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
-  const resolvedParams = use(params);
-  const projectId = resolvedParams.projectId;
+export default function ProjectDetailPage() {
+  const params = useParams();
+  const projectId = (params?.projectId as string) || "";
 
   const { profile } = useAuthStore();
   const userRole = profile?.role || "VIEWER";
@@ -51,6 +50,7 @@ export default function ProjectDetailPage({
   const uploadMutation = useUploadDocument(projectId);
   const deleteMutation = useDeleteDocument(projectId);
   const processMutation = useStartProcessing(projectId);
+  const cancelMutation = useCancelJob(projectId);
 
   // Active Job & Polling
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
@@ -59,6 +59,18 @@ export default function ProjectDetailPage({
     activeJobId,
     Boolean(activeJobId)
   );
+
+  // Recover the active job id after a page reload/navigation, so Cancel/Retry
+  // keep working even when this component remounted mid-processing.
+  const { data: latestJobData } = useLatestJob(
+    projectId,
+    !activeJobId && project?.status === "PROCESSING"
+  );
+  useEffect(() => {
+    if (!activeJobId && latestJobData?.id) {
+      setActiveJobId(latestJobData.id);
+    }
+  }, [activeJobId, latestJobData]);
 
   // Uploading state per document type
   const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
@@ -109,6 +121,20 @@ export default function ProjectDetailPage({
       throw err;
     } finally {
       setDeletingDocId(null);
+    }
+  };
+
+  const handleCancelProcessing = async () => {
+    if (!activeJobId) return;
+    setActionError(null);
+    try {
+      await cancelMutation.mutateAsync(activeJobId);
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error
+          ? err.message
+          : "Failed to cancel processing. Please try again."
+      );
     }
   };
 
@@ -213,6 +239,8 @@ export default function ProjectDetailPage({
             projectId={projectId}
             onRetry={handleStartCrossCheck}
             onDismiss={() => setIsStatusCardDismissed(true)}
+            onCancel={handleCancelProcessing}
+            isCancelling={cancelMutation.isPending}
           />
         )}
 

@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, Integer, Boolean, Float
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, Integer, Boolean, Float, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -23,6 +23,17 @@ class DocumentType(str, enum.Enum):
     DESIGN = "DESIGN"
     ORDER = "ORDER"
     ACKNOWLEDGEMENT = "ACKNOWLEDGEMENT"
+
+class ItemCategory(str, enum.Enum):
+    CABINET = "CABINET"
+    ACCESSORY = "ACCESSORY"
+    FILLER = "FILLER"
+    PANEL = "PANEL"
+    MOLDING = "MOLDING"
+    APPLIANCE = "APPLIANCE"
+    ARCHITECTURAL_ANNOTATION = "ARCHITECTURAL_ANNOTATION"
+    COMMERCIAL_CHARGE = "COMMERCIAL_CHARGE"
+    UNKNOWN = "UNKNOWN"
 
 class DocumentStatus(str, enum.Enum):
     UPLOADED = "UPLOADED"
@@ -67,21 +78,205 @@ class User(Base):
 
     organization = relationship("Organization", back_populates="users")
 
+class Manufacturer(Base):
+    """
+    Cabinet Code Intelligence: identifies which manufacturer a project's
+    Design/Order/Acknowledgement documents belong to, so manufacturer-specific
+    SKU dictionaries/aliases can be looked up. Global by default (organization_id
+    NULL) since manufacturer identities like "Yorktowne" are shared industry
+    knowledge, not tenant-private data; organization_id is set only for a
+    tenant's own custom/private manufacturer entry.
+    """
+    __tablename__ = "manufacturers"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    # Explicit flag (kept consistent with organization_id IS NULL by the
+    # service layer, never settable via the tenant-facing API — see
+    # ManufacturerService: only pre-seeded/system data is ever global).
+    is_global = Column(Boolean, nullable=False, default=False)
+
+    created_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    organization = relationship("Organization")
+    code_dictionary_entries = relationship("ManufacturerCodeDictionary", back_populates="manufacturer", cascade="all, delete-orphan")
+
+
+class ManufacturerCodeDictionary(Base):
+    """
+    Cabinet Code Intelligence: a manufacturer's known SKU/code catalog, entered
+    (or later imported from a spec book) per manufacturer. A code and its
+    documented aliases (e.g. BPFHC12 / BFHC12) share `alias_group`; the
+    canonical/primary spelling has `is_primary_alias=True`. `source_document_id`
+    points at a `ManufacturerSpecBook.id` when a row was approved from a spec
+    book extraction (see below) rather than entered by hand; `source_version`/
+    `effective_from`/`effective_to` support historical/versioned catalogs.
+    """
+    __tablename__ = "manufacturer_code_dictionary"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    manufacturer_id = Column(Uuid(as_uuid=True), ForeignKey("manufacturers.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    code = Column(String, nullable=False)
+    normalized_code = Column(String, nullable=False, index=True)
+    category = Column(SQLEnum(ItemCategory), nullable=False)
+    description = Column(String, nullable=True)
+
+    alias_group = Column(String, nullable=True, index=True)
+    is_primary_alias = Column(Boolean, nullable=False, default=True)
+
+    is_current = Column(Boolean, nullable=False, default=True)
+    effective_from = Column(DateTime(timezone=True), nullable=True)
+    effective_to = Column(DateTime(timezone=True), nullable=True)
+
+    source_document_id = Column(Uuid(as_uuid=True), nullable=True)
+    source_version = Column(String, nullable=True)
+
+    created_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    manufacturer = relationship("Manufacturer", back_populates="code_dictionary_entries")
+
+    __table_args__ = (
+        UniqueConstraint("manufacturer_id", "normalized_code", name="uq_manufacturer_code_normalized"),
+    )
+
+
+class SpecBookStatus(str, enum.Enum):
+    UPLOADED = "UPLOADED"
+    EXTRACTING = "EXTRACTING"
+    EXTRACTED = "EXTRACTED"
+    FAILED = "FAILED"
+
+
+class SpecBookRowStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
+class ManufacturerSpecBook(Base):
+    """
+    Settings → Manufacturer → Upload Specification Book PDF → Extract codes →
+    Review → Approve → Manufacturer Dictionary.
+
+    An uploaded catalog document. Extraction runs as a background job (mirrors
+    the existing Design/Order/Ack processing pipeline in
+    app/worker/tasks/processing.py) and writes candidate rows to
+    ManufacturerSpecBookRow — never directly into ManufacturerCodeDictionary.
+    Only human-approved rows ever become real dictionary entries.
+    """
+    __tablename__ = "manufacturer_spec_books"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    manufacturer_id = Column(Uuid(as_uuid=True), ForeignKey("manufacturers.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    original_filename = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False, unique=True)
+    mime_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+
+    status = Column(SQLEnum(SpecBookStatus), nullable=False, default=SpecBookStatus.UPLOADED)
+    source_version = Column(String, nullable=True)
+    error = Column(JSON, nullable=True)
+
+    uploaded_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    manufacturer = relationship("Manufacturer")
+    rows = relationship("ManufacturerSpecBookRow", back_populates="spec_book", cascade="all, delete-orphan")
+
+
+class ManufacturerSpecBookRow(Base):
+    """
+    One AI-extracted candidate code from a spec book, pending human review.
+    Raw AI output is preserved as-is (raw_code/description/category/confidence)
+    even after a reviewer edits it — the edit updates this row directly (there
+    is only one row per candidate; the pre-edit AI guess is not separately
+    retained beyond this row's own history), but it is NEVER written into
+    ManufacturerCodeDictionary until explicitly approved.
+    """
+    __tablename__ = "manufacturer_spec_book_rows"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    spec_book_id = Column(Uuid(as_uuid=True), ForeignKey("manufacturer_spec_books.id", ondelete="CASCADE"), nullable=False, index=True)
+    manufacturer_id = Column(Uuid(as_uuid=True), ForeignKey("manufacturers.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    raw_code = Column(String, nullable=False)
+    normalized_code = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    category = Column(SQLEnum(ItemCategory), nullable=False, default=ItemCategory.UNKNOWN)
+    confidence = Column(Float, nullable=True)
+
+    page_number = Column(Integer, nullable=True)
+    source_text = Column(String, nullable=True)
+
+    status = Column(SQLEnum(SpecBookRowStatus), nullable=False, default=SpecBookRowStatus.PENDING)
+    reviewed_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    spec_book = relationship("ManufacturerSpecBook", back_populates="rows")
+
+
+class NKBAReferenceDocument(Base):
+    """
+    A stored reference copy of an NKBA (National Kitchen & Bath Association)
+    guideline document — generic industry nomenclature knowledge, never a
+    manufacturer's own SKU catalog. Storage/reference only: nothing is
+    extracted from it and it does not feed Cabinet Code Intelligence's
+    classification logic (which stays exactly as implemented in Phase A).
+    Global like a manufacturer's global entries: visible to every
+    organization, editable/deletable only by the organization that uploaded
+    it (organization_id NULL = a system-seeded document, never deletable by
+    any tenant).
+    """
+    __tablename__ = "nkba_reference_documents"
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    label = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False, unique=True)
+    mime_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+
+    uploaded_by = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    
+    manufacturer_id = Column(Uuid(as_uuid=True), ForeignKey("manufacturers.id", ondelete="SET NULL"), nullable=True, index=True)
+
     name = Column(String, nullable=False)
     customer_name = Column(String, nullable=True)
     dealer_name = Column(String, nullable=True)
     status = Column(SQLEnum(ProjectStatus), nullable=False, default=ProjectStatus.DRAFT)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     organization = relationship("Organization", back_populates="projects")
+    manufacturer = relationship("Manufacturer")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="project", cascade="all, delete-orphan")
 
@@ -98,7 +293,10 @@ class Document(Base):
     mime_type = Column(String, nullable=False)
     file_size = Column(Integer, nullable=False)
     status = Column(SQLEnum(DocumentStatus), nullable=False, default=DocumentStatus.UPLOADED)
-    
+    # F8.3 Phase 3: SHA-256 of the raw file bytes, computed at upload time — the stable
+    # identity used for extraction idempotency (never filename/timestamp/DB id).
+    document_hash = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -138,34 +336,35 @@ class ProcessingJob(Base):
 ProcessingJob.__table__.columns['project_id'].unique = False
 
 class Extraction(Base):
+    """
+    F8.3 Phase 3: one row per extraction ATTEMPT (no longer 1:1 with Document —
+    reprocessing creates a new row rather than deleting the old one, so
+    extraction history is never destroyed). `is_latest` marks the row every
+    downstream stage should read; `document_hash` + `extraction_version` +
+    provider/model/prompt_version together form the identity used to decide
+    whether a prior attempt can be safely reused (idempotency).
+    """
     __tablename__ = "extractions"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    document_id = Column(Uuid(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True)
+    document_id = Column(Uuid(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    
+
     raw_data = Column(JSON, nullable=False)
     provider = Column(String, nullable=False)
     model_name = Column(String, nullable=False)
     prompt_version = Column(String, nullable=False)
     confidence = Column(JSON, nullable=True)
-    
+    attempt = Column(Integer, nullable=False, default=1)
+    is_latest = Column(Boolean, nullable=False, default=True)
+    extraction_version = Column(String, nullable=True)
+    document_hash = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     document = relationship("Document", back_populates="extractions")
     organization = relationship("Organization")
-
-class ItemCategory(str, enum.Enum):
-    CABINET = "CABINET"
-    ACCESSORY = "ACCESSORY"
-    FILLER = "FILLER"
-    PANEL = "PANEL"
-    MOLDING = "MOLDING"
-    APPLIANCE = "APPLIANCE"
-    ARCHITECTURAL_ANNOTATION = "ARCHITECTURAL_ANNOTATION"
-    COMMERCIAL_CHARGE = "COMMERCIAL_CHARGE"
-    UNKNOWN = "UNKNOWN"
 
 class CanonicalLineItem(Base):
     __tablename__ = "canonical_line_items"
@@ -178,13 +377,19 @@ class CanonicalLineItem(Base):
     source_type = Column(SQLEnum(DocumentType), nullable=False)
     
     raw_sku = Column(String, nullable=True)
-    normalized_sku = Column(String, nullable=True)
+    normalized_sku = Column(String, nullable=True, index=True)
     description = Column(String, nullable=True)
     
     item_category = Column(SQLEnum(ItemCategory), nullable=False, default=ItemCategory.CABINET)
     category_confidence = Column(Float, nullable=True, default=1.0)
     category_evidence = Column(JSON, nullable=True)
-    
+    # Cabinet Code Intelligence: the full CabinetCodeDecision (manufacturer
+    # verification tier, confidence level, reason codes, candidate variants),
+    # additive alongside item_category/category_confidence above — those two
+    # columns are never changed by this feature (backward compatibility with
+    # every existing classification behavior/test when no manufacturer is set).
+    cabinet_classification = Column(JSON, nullable=True)
+
     quantity = Column(Integer, nullable=True)
     
     dimensions = Column(JSON, nullable=True)

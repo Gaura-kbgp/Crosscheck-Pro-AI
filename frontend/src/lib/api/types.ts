@@ -128,6 +128,8 @@ export interface Project {
   name: string;
   customer_name?: string | null;
   dealer_name?: string | null;
+  manufacturer_id?: string | null;
+  manufacturer_name?: string | null;
   status: ProjectStatus;
   document_count?: number;
   uploaded_document_types?: string[];
@@ -142,6 +144,7 @@ export interface ProjectCreateInput {
   name: string;
   customer_name?: string;
   dealer_name?: string;
+  manufacturer_id?: string | null;
 }
 
 export interface ProjectUpdateInput {
@@ -149,6 +152,150 @@ export interface ProjectUpdateInput {
   customer_name?: string;
   dealer_name?: string;
   status?: ProjectStatus;
+  manufacturer_id?: string | null;
+}
+
+/** Cabinet Code Intelligence Step 1: manufacturer + dictionary management. */
+export interface Manufacturer {
+  id: string;
+  organization_id?: string | null;
+  name: string;
+  is_global: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturerCreateInput {
+  name: string;
+}
+
+export interface ManufacturerUpdateInput {
+  name?: string;
+}
+
+export interface ManufacturerCode {
+  id: string;
+  manufacturer_id: string;
+  code: string;
+  normalized_code: string;
+  category: ItemCategory;
+  description?: string | null;
+  alias_group?: string | null;
+  is_primary_alias: boolean;
+  is_current: boolean;
+  source_version?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturerCodeCreateInput {
+  code: string;
+  description?: string | null;
+  category: ItemCategory;
+  alias_group?: string | null;
+  is_primary_alias?: boolean;
+  is_current?: boolean;
+  source_version?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+}
+
+export interface ManufacturerCodeUpdateInput {
+  description?: string | null;
+  category?: ItemCategory;
+  alias_group?: string | null;
+  is_primary_alias?: boolean;
+  is_current?: boolean;
+  source_version?: string | null;
+  effective_from?: string | null;
+  effective_to?: string | null;
+}
+
+export interface BulkImportRowError {
+  row: number;
+  code?: string | null;
+  reason: string;
+}
+
+export interface BulkImportPreview {
+  total_rows: number;
+  valid: number;
+  duplicates: number;
+  invalid: number;
+  errors: BulkImportRowError[];
+}
+
+export interface BulkImportResult {
+  imported: number;
+  skipped_duplicates: number;
+  skipped_invalid: number;
+  errors: BulkImportRowError[];
+}
+
+/** Settings → Manufacturer → Upload Specification Book PDF → Extract codes →
+ * Review extracted dictionary → Approve → Manufacturer Dictionary. */
+export type SpecBookStatus = "UPLOADED" | "EXTRACTING" | "EXTRACTED" | "FAILED";
+export type SpecBookRowStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface SpecBook {
+  id: string;
+  manufacturer_id: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  status: SpecBookStatus;
+  source_version?: string | null;
+  error?: { message?: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpecBookRow {
+  id: string;
+  spec_book_id: string;
+  manufacturer_id: string;
+  raw_code: string;
+  normalized_code: string;
+  description?: string | null;
+  category: ItemCategory;
+  confidence?: number | null;
+  page_number?: number | null;
+  source_text?: string | null;
+  status: SpecBookRowStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpecBookRowUpdateInput {
+  raw_code?: string;
+  description?: string | null;
+  category?: ItemCategory;
+}
+
+export interface ApproveRowsRequest {
+  row_ids?: string[];
+  approve_all?: boolean;
+}
+
+export interface ApproveRowsResult {
+  approved: number;
+  skipped_duplicates: number;
+  errors: BulkImportRowError[];
+}
+
+/** Settings → NKBA Reference Library: storage-only reference PDFs, global
+ * across organizations, never extracted from or used in classification. */
+export interface NKBAReferenceDocument {
+  id: string;
+  organization_id?: string | null;
+  label: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Document {
@@ -194,11 +341,57 @@ export interface Discrepancy {
   order_value?: string | null;
   ack_value?: string | null;
   severity: Severity;
+  /** Deterministically computed by the crosscheck engine from the 3-way Design -> Order -> Ack presence state: the first document in which the item actually exists. */
   introduced_at?: string | null;
   status: ReviewStatus;
   explanation?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** F8.3 Phase 2: where an extracted value came from in the source document —
+ * page_number/source_text are the AI's claim, `status` says whether that
+ * claim was verified against the document's own deterministic page text. */
+/** F8.3 Phase 3: present when a field's OCR (Pass A) and Vision (Pass B)
+ * readings disagreed — both raw values are kept, never auto-resolved. */
+export interface FieldConflict {
+  field: string;
+  ocr_value: unknown;
+  vision_value: unknown;
+}
+
+export interface SourceEvidence {
+  page_number?: number | null;
+  source_text?: string | null;
+  status: "VERIFIED" | "UNCERTAIN";
+  verification?: {
+    method: "OCR_PLUS_VISION" | "VISION_ONLY" | "OCR_ONLY" | "TEXT_PDF" | string;
+    status: "VERIFIED" | "UNCERTAIN";
+    conflicts?: FieldConflict[];
+  } | null;
+}
+
+/** Cabinet Code Intelligence: why an item was classified as it was — never
+ * shown as raw model chain-of-thought, just the reason codes/evidence. */
+export interface CabinetClassification {
+  raw_code?: string | null;
+  normalized_code?: string | null;
+  classification: string;
+  is_cabinet_candidate: boolean;
+  is_verified: boolean;
+  confidence_level: "HIGH" | "MEDIUM" | "LOW" | "UNCERTAIN";
+  confidence_score: number;
+  verification_source: string;
+  exclusion_reason?: string | null;
+  candidate_variants?: string[];
+  reason_codes?: string[];
+  notes?: string[];
+}
+
+export interface CanonicalItemRef {
+  raw_sku?: string | null;
+  source_metadata?: { evidence?: SourceEvidence } | null;
+  cabinet_classification?: CabinetClassification | null;
 }
 
 export interface MatchGroup {
@@ -215,12 +408,31 @@ export interface MatchGroup {
   final_modifications?: string | null;
   final_unit_price?: number | null;
   final_total_price?: number | null;
+  design_item?: CanonicalItemRef | null;
+  order_item?: CanonicalItemRef | null;
+  ack_item?: CanonicalItemRef | null;
   discrepancies: Discrepancy[];
+}
+
+/**
+ * Discrepancy-level summary computed once by the backend (app/api/v1/crosscheck.py)
+ * from the full, unfiltered set of findings for the project — the single source
+ * of truth for the Human Review summary cards. open === critical + high + warning + info.
+ */
+export interface DiscrepancySummary {
+  open: number;
+  escalated: number;
+  reviewed: number;
+  critical: number;
+  high: number;
+  warning: number;
+  info: number;
 }
 
 export interface CrossCheckResult {
   project_id: string;
   groups: MatchGroup[];
+  discrepancySummary: DiscrepancySummary;
   summary: {
     total_groups: number;
     matched: number;

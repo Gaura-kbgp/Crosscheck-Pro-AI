@@ -11,6 +11,7 @@ import { PreferencesTab } from "@/components/settings/preferences-tab";
 import { NotificationsTab } from "@/components/settings/notifications-tab";
 import { SecurityTab } from "@/components/settings/security-tab";
 import { CrossCheckTab } from "@/components/settings/crosscheck-tab";
+import { ManufacturerIntelligenceTab } from "@/components/settings/manufacturer-intelligence-tab";
 import { DangerZoneTab } from "@/components/settings/danger-zone-tab";
 import {
   User,
@@ -19,6 +20,7 @@ import {
   Bell,
   ShieldCheck,
   GitCompare,
+  Factory,
   AlertTriangle,
   ChevronRight,
   Loader2,
@@ -31,6 +33,7 @@ type SettingsTabId =
   | "notifications"
   | "security"
   | "crosscheck"
+  | "manufacturers"
   | "danger";
 
 interface TabItem {
@@ -77,6 +80,12 @@ const SETTINGS_TABS: TabItem[] = [
     label: "CrossCheck Preferences",
     description: "Review defaults & verification",
     icon: GitCompare,
+  },
+  {
+    id: "manufacturers",
+    label: "Manufacturer & Cabinet Intelligence",
+    description: "Manufacturer dictionaries & SKU aliases",
+    icon: Factory,
   },
   {
     id: "danger",
@@ -214,6 +223,7 @@ function SettingsContent() {
           {activeTab === "notifications" && <NotificationsTab />}
           {activeTab === "security" && <SecurityTab profile={activeProfile} />}
           {activeTab === "crosscheck" && <CrossCheckTab />}
+          {activeTab === "manufacturers" && <ManufacturerIntelligenceTab />}
           {activeTab === "danger" && <DangerZoneTab profile={activeProfile} />}
         </main>
       </div>

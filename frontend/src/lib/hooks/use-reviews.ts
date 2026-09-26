@@ -19,6 +19,23 @@ export function useReviewAction(projectId: string) {
   });
 }
 
+export function useBulkAcceptNonCritical(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (reason?: string) => {
+      const response = await reviewApi.bulkAcceptNonCritical(projectId, reason);
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "crosscheck"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "audit-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}
+
 export function useFinalizeProject(projectId: string) {
   const queryClient = useQueryClient();
 

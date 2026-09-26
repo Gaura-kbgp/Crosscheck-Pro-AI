@@ -3,6 +3,25 @@ import { documentsApi, processingApi } from "@/lib/api/endpoints";
 import { DocumentType, ProcessingJobResponse } from "@/lib/api/types";
 import { PROJECT_KEYS } from "./use-projects";
 
+const ACCEPTED_DOCUMENT_EXTENSIONS = [
+  ".pdf",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".bmp",
+  ".webp",
+  ".tif",
+  ".tiff",
+  ".xls",
+  ".xlsx",
+  ".csv",
+  ".txt",
+  ".md",
+  ".doc",
+  ".docx",
+];
+
 export const DOCUMENT_KEYS = {
   all: ["documents"] as const,
   projectDocuments: (projectId: string) => [...DOCUMENT_KEYS.all, "project", projectId] as const,
@@ -32,13 +51,15 @@ export function useUploadDocument(projectId: string) {
       file: File;
     }) => {
       // Validate file size (< 10 MB)
-      const maxSizeBytes = 10 * 1024 * 1024;
+      const maxSizeBytes = 200 * 1024 * 1024;
       if (file.size > maxSizeBytes) {
-        throw new Error("File exceeds the maximum limit of 10 MB.");
+        throw new Error("File exceeds the maximum limit of 200 MB.");
       }
       // Validate file extension / MIME
-      if (!file.name.toLowerCase().endsWith(".pdf")) {
-        throw new Error("Only PDF documents are supported.");
+      const lowerName = file.name.toLowerCase();
+      const isAccepted = ACCEPTED_DOCUMENT_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+      if (!isAccepted) {
+        throw new Error("Unsupported file format. Please upload a PDF, image, or Excel/CSV file.");
       }
       return documentsApi.upload(projectId, documentType, file);
     },
@@ -110,5 +131,35 @@ export function useJobStatus(jobId: string | null, enabled: boolean = true) {
       return 2000; // Poll every 2s during active processing
     },
     staleTime: 0,
+  });
+}
+
+export function useLatestJob(projectId: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...DOCUMENT_KEYS.all, "latestJob", projectId],
+    queryFn: () => processingApi.latestJob(projectId),
+    enabled: Boolean(projectId) && enabled,
+    retry: false,
+    staleTime: 0,
+  });
+}
+
+export function useCancelJob(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (jobId: string) => processingApi.cancel(jobId),
+    onSuccess: (job: ProcessingJobResponse) => {
+      queryClient.invalidateQueries({
+        queryKey: DOCUMENT_KEYS.jobStatus(job.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: PROJECT_KEYS.detail(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: DOCUMENT_KEYS.projectDocuments(projectId),
+      });
+      return job;
+    },
   });
 }

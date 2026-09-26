@@ -70,8 +70,8 @@ def test_document_upload_invalid_mime(client, db_session):
     token = create_test_token("auth-a")
     headers = {"Authorization": f"Bearer {token}"}
 
-    file_content = b"Image content"
-    files = {"file": ("test.png", BytesIO(file_content), "image/png")}
+    file_content = b"Binary content"
+    files = {"file": ("test.exe", BytesIO(file_content), "application/x-msdownload")}
     data = {"document_type": "ORDER"}
 
     response = client.post(f"/api/v1/projects/{project_a.id}/documents", headers=headers, files=files, data=data)

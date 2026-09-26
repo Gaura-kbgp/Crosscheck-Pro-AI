@@ -2,14 +2,14 @@ from uuid import UUID
 import uuid
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from app.models.core import ProcessingJob, ProcessingJobStatus, Document, DocumentType, Project
+from app.models.core import ProcessingJob, ProcessingJobStatus, Document, DocumentType, Project, ProjectStatus
 from app.schemas.processing import ProcessingJobResponse
 
 class ProcessingService:
     def __init__(self, db: Session):
         self.db = db
         
-    def start_processing(self, project_id: UUID, organization_id: UUID, background_tasks = None) -> ProcessingJobResponse:
+    def start_processing(self, project_id: UUID, organization_id: UUID, background_tasks = None, force_reprocess: bool = False) -> ProcessingJobResponse:
         # Check if project exists and belongs to organization
         project = self.db.query(Project).filter(
             Project.id == project_id,
@@ -64,11 +64,12 @@ class ProcessingService:
                     str(job.id),
                     str(project_id),
                     str(organization_id),
-                    job.correlation_id
+                    job.correlation_id,
+                    force_reprocess
                 )
             else:
                 from app.worker.tasks.processing import process_project_pipeline
-                process_project_pipeline.delay(str(job.id), str(project_id), str(organization_id), job.correlation_id)
+                process_project_pipeline.delay(str(job.id), str(project_id), str(organization_id), job.correlation_id, force_reprocess)
         except Exception:
             # Fallback if something fails during import or dispatch
             pass
@@ -80,8 +81,42 @@ class ProcessingService:
             ProcessingJob.id == job_id,
             ProcessingJob.organization_id == organization_id
         ).first()
-        
+
         if not job:
             raise HTTPException(status_code=404, detail="Processing job not found")
-            
+
+        return ProcessingJobResponse.model_validate(job)
+
+    def get_latest_job(self, project_id: UUID, organization_id: UUID) -> ProcessingJobResponse:
+        job = self.db.query(ProcessingJob).filter(
+            ProcessingJob.project_id == project_id,
+            ProcessingJob.organization_id == organization_id
+        ).order_by(ProcessingJob.created_at.desc()).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="No processing job found for this project")
+
+        return ProcessingJobResponse.model_validate(job)
+
+    def cancel_job(self, job_id: UUID, organization_id: UUID) -> ProcessingJobResponse:
+        job = self.db.query(ProcessingJob).filter(
+            ProcessingJob.id == job_id,
+            ProcessingJob.organization_id == organization_id
+        ).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Processing job not found")
+
+        if job.status in (ProcessingJobStatus.COMPLETED, ProcessingJobStatus.FAILED):
+            raise HTTPException(status_code=409, detail="Job has already finished and cannot be cancelled")
+
+        job.status = ProcessingJobStatus.FAILED
+        job.error = {"message": "Cancelled by user"}
+
+        project = self.db.query(Project).filter(Project.id == job.project_id).first()
+        if project:
+            project.status = ProjectStatus.FAILED
+
+        self.db.commit()
+        self.db.refresh(job)
         return ProcessingJobResponse.model_validate(job)

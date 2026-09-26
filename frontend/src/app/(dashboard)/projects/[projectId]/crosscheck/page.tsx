@@ -1,7 +1,8 @@
 "use client";
 
-import React, { use, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { useProject } from "@/lib/hooks/use-projects";
@@ -11,13 +12,9 @@ import { CrossCheckSummary } from "@/components/crosscheck/crosscheck-summary";
 import { CrossCheckList } from "@/components/crosscheck/crosscheck-list";
 import { MatchGroupDetailDrawer } from "@/components/crosscheck/match-group-detail-drawer";
 
-export default function CrossCheckPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
-  const resolvedParams = use(params);
-  const projectId = resolvedParams.projectId;
+export default function CrossCheckPage() {
+  const params = useParams();
+  const projectId = (params?.projectId as string) || "";
 
   const {
     data: project,

@@ -348,7 +348,9 @@ def test_19_design_present_order_absent_ack_present(matching_engine, crosscheck_
 
     discs = crosscheck_engine.evaluate(mgs, proj_id, org_id)
     assert len(discs) == 1
-    assert discs[0].introduced_at == DocumentType.ORDER
+    # Deterministic 3-way attribution: Design is the first source where the
+    # item exists, so that's where it's introduced.
+    assert discs[0].introduced_at == DocumentType.DESIGN
     assert "OMITTED" in discs[0].explanation
     assert "RESTORED" in discs[0].explanation
     assert discs[0].severity == Severity.WARNING
@@ -516,7 +518,9 @@ def test_28_21ahsdx7230_omitted_and_restored(matching_engine, crosscheck_engine,
 
     discs = crosscheck_engine.evaluate(mgs, proj_id, org_id)
     assert len(discs) == 1
-    assert discs[0].introduced_at == DocumentType.ORDER
+    # Deterministic 3-way attribution: Design is the first source where the
+    # item exists, so that's where it's introduced.
+    assert discs[0].introduced_at == DocumentType.DESIGN
     assert discs[0].severity == Severity.WARNING
 
 

@@ -73,13 +73,16 @@ def test_exact_matching(db_session, crosscheck_env):
 def test_missing_order(db_session, crosscheck_env):
     service, project_id, org_id = crosscheck_env
     create_item(db_session, project_id, org_id, DocumentType.DESIGN, "A123")
-    
+
     res = service.process_project(project_id, org_id)
     mg = db_session.query(MatchGroup).first()
     assert mg.status == MatchGroupStatus.MISSING
     assert len(mg.discrepancies) == 1
     assert mg.discrepancies[0].field == "item_presence"
-    assert mg.discrepancies[0].introduced_at == DocumentType.ORDER
+    # Deterministic 3-way attribution: Design is the first (and only) source
+    # where the item exists, so it is where the discrepancy is introduced —
+    # not ORDER, which never carried the item at all.
+    assert mg.discrepancies[0].introduced_at == DocumentType.DESIGN
 
 def test_extra_order(db_session, crosscheck_env):
     service, project_id, org_id = crosscheck_env

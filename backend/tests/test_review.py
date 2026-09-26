@@ -72,8 +72,8 @@ def test_accept_finding(client: TestClient, db_session: Session, test_user: User
     
     # Verification
     db_session.refresh(disc)
-    assert disc.status == "RESOLVED"
-    
+    assert disc.status == "ACCEPTED"
+
     hr = db_session.query(HumanReview).filter_by(discrepancy_id=disc.id).first()
     assert hr is not None
     assert hr.action == ReviewAction.ACCEPT_FINDING
@@ -82,6 +82,57 @@ def test_accept_finding(client: TestClient, db_session: Session, test_user: User
     audit = db_session.query(AuditLog).filter_by(resource_id=str(disc.id)).first()
     assert audit is not None
     assert audit.action == "ACCEPT_FINDING"
+
+def test_bulk_accept_non_critical(client: TestClient, db_session: Session, test_user: User, test_organization: Organization, headers: dict):
+    proj = Project(organization_id=test_organization.id, name="Bulk Accept Test")
+    db_session.add(proj)
+    db_session.commit()
+
+    mg = MatchGroup(project_id=proj.id, organization_id=test_organization.id, status=MatchGroupStatus.UNCERTAIN)
+    db_session.add(mg)
+    db_session.commit()
+
+    def make_disc(severity, status="OPEN"):
+        d = Discrepancy(
+            project_id=proj.id, organization_id=test_organization.id, match_group_id=mg.id,
+            field="quantity", source_values={}, comparison_values={},
+            status=status, severity=severity,
+        )
+        db_session.add(d)
+        return d
+
+    critical = make_disc(Severity.CRITICAL)
+    warning = make_disc(Severity.WARNING)
+    info = make_disc(Severity.INFO)
+    already_escalated = make_disc(Severity.WARNING, status="ESCALATED")
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/projects/{proj.id}/discrepancies/bulk-accept",
+        json={"reason": "Bulk cleanup"},
+        headers=headers
+    )
+    assert response.status_code == 200
+    assert response.json()["accepted_count"] == 2  # warning + info only
+
+    db_session.refresh(critical)
+    db_session.refresh(warning)
+    db_session.refresh(info)
+    db_session.refresh(already_escalated)
+
+    # Critical is never touched by bulk accept — still requires individual review
+    assert critical.status == "OPEN"
+    assert warning.status == "ACCEPTED"
+    assert info.status == "ACCEPTED"
+    # A finding that isn't OPEN (already escalated) is left alone too
+    assert already_escalated.status == "ESCALATED"
+
+    # Each accepted row has its own review + audit trail, same as a single accept
+    hr_warning = db_session.query(HumanReview).filter_by(discrepancy_id=warning.id).first()
+    assert hr_warning is not None
+    assert hr_warning.action == ReviewAction.ACCEPT_FINDING
+    hr_info = db_session.query(HumanReview).filter_by(discrepancy_id=info.id).first()
+    assert hr_info is not None
 
 def test_false_positive(client: TestClient, db_session: Session, test_user: User, test_organization: Organization, headers: dict):
     proj = Project(organization_id=test_organization.id, name="Test FP")

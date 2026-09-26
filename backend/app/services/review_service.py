@@ -3,8 +3,8 @@ from typing import Optional, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.core import (
-    Discrepancy, MatchGroup, HumanReview, ReviewAction, User, 
-    CanonicalLineItem, Project, ProjectStatus
+    Discrepancy, MatchGroup, HumanReview, ReviewAction, User,
+    CanonicalLineItem, Project, ProjectStatus, Severity
 )
 from app.services.audit_service import AuditService
 from app.engines.matching import MatchingEngine
@@ -29,10 +29,11 @@ class ReviewService:
         reason: Optional[str] = None
     ):
         disc = ReviewService._get_discrepancy(db, discrepancy_id, organization_id)
-        
+
         # Action specific logic
-        disc.status = "RESOLVED"
-        
+        previous_status = disc.status
+        disc.status = "ACCEPTED"
+
         review = HumanReview(
             organization_id=organization_id,
             project_id=disc.project_id,
@@ -43,7 +44,7 @@ class ReviewService:
             reason=reason
         )
         db.add(review)
-        
+
         AuditService.log_action(
             db=db,
             organization_id=organization_id,
@@ -52,12 +53,67 @@ class ReviewService:
             resource_type="Discrepancy",
             resource_id=str(disc.id),
             actor_id=reviewer_id,
-            previous_state={"status": "OPEN"},
-            new_state={"status": "RESOLVED"},
+            previous_state={"status": previous_status},
+            new_state={"status": "ACCEPTED"},
             metadata_={"reason": reason}
         )
         db.commit()
         return disc
+
+    @staticmethod
+    def bulk_accept_non_critical(
+        db: Session,
+        project_id: uuid.UUID,
+        organization_id: uuid.UUID,
+        reviewer_id: uuid.UUID,
+        reason: Optional[str] = None
+    ) -> list[Discrepancy]:
+        """
+        Accepts every OPEN, non-CRITICAL discrepancy on a project in one pass.
+        Critical findings are deliberately excluded — they still require an
+        individual reviewer decision — and each row gets the same HumanReview
+        + audit trail a single accept_finding call would produce, so the
+        review history stays complete and per-item accountable.
+        """
+        project = db.query(Project).filter_by(id=project_id, organization_id=organization_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if project.status == ProjectStatus.FINALIZED:
+            raise HTTPException(status_code=400, detail="Cannot modify a finalized project")
+
+        discs = db.query(Discrepancy).filter(
+            Discrepancy.project_id == project_id,
+            Discrepancy.organization_id == organization_id,
+            Discrepancy.status == "OPEN",
+            Discrepancy.severity != Severity.CRITICAL,
+        ).with_for_update().all()
+
+        for disc in discs:
+            disc.status = "ACCEPTED"
+            db.add(HumanReview(
+                organization_id=organization_id,
+                project_id=disc.project_id,
+                discrepancy_id=disc.id,
+                match_group_id=disc.match_group_id,
+                reviewer_id=reviewer_id,
+                action=ReviewAction.ACCEPT_FINDING,
+                reason=reason or "Bulk accepted (non-critical)"
+            ))
+            AuditService.log_action(
+                db=db,
+                organization_id=organization_id,
+                project_id=disc.project_id,
+                action="ACCEPT_FINDING",
+                resource_type="Discrepancy",
+                resource_id=str(disc.id),
+                actor_id=reviewer_id,
+                previous_state={"status": "OPEN"},
+                new_state={"status": "ACCEPTED"},
+                metadata_={"reason": reason, "bulk": True}
+            )
+
+        db.commit()
+        return discs
 
     @staticmethod
     def mark_false_positive(
@@ -150,13 +206,13 @@ class ReviewService:
         mg = db.query(MatchGroup).filter_by(id=disc.match_group_id).with_for_update().first()
         
         previous_status = disc.status
-        disc.status = "RESOLVED"
-        
+        disc.status = "ACKNOWLEDGED"
+
         # Usually, crosscheck engine resolves the final state to Ack. But if it was open, we manually confirm.
         # Actually, the user requirement states: "Update final resolved state to acknowledge the manufacturer value."
         # We can re-run CrossCheckEngine or explicitly set it.
         # It's safer to re-run CrossCheckEngine to ensure final state consistency.
-        
+
         review = HumanReview(
             organization_id=organization_id,
             project_id=disc.project_id,
@@ -167,7 +223,7 @@ class ReviewService:
             reason=reason
         )
         db.add(review)
-        
+
         AuditService.log_action(
             db=db,
             organization_id=organization_id,
@@ -177,7 +233,7 @@ class ReviewService:
             resource_id=str(disc.id),
             actor_id=reviewer_id,
             previous_state={"status": previous_status},
-            new_state={"status": "RESOLVED"},
+            new_state={"status": "ACKNOWLEDGED"},
             metadata_={"reason": reason}
         )
         

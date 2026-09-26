@@ -264,6 +264,7 @@ class ReportService:
             "severity",
             "confidence",
             "introduced_at",
+            "reason",
             "status",
             "review_status",
             "final_sku",
@@ -327,6 +328,7 @@ class ReportService:
                 row["severity"] = ""
                 row["confidence"] = ""
                 row["introduced_at"] = ""
+                row["reason"] = ""
                 row["review_status"] = ""
                 writer.writerow(row)
             else:
@@ -336,7 +338,8 @@ class ReportService:
                     row["severity"] = d.severity.value if hasattr(d.severity, 'value') else str(d.severity)
                     row["confidence"] = d.confidence or ""
                     row["introduced_at"] = d.introduced_at.value if hasattr(d.introduced_at, 'value') else (str(d.introduced_at) if d.introduced_at else "")
-                    
+                    row["reason"] = d.explanation or ""
+
                     # Review status
                     rev = disc_review_map.get(d.id) or mg_review_map.get(mg.id)
                     row["review_status"] = (rev.action.value if hasattr(rev.action, 'value') else str(rev.action)) if rev else d.status
@@ -513,6 +516,14 @@ class ReportService:
             leading=9,
             textColor=ACCENT_BLUE
         )
+        reason_style = ParagraphStyle(
+            'ReasonText',
+            parent=styles['Normal'],
+            fontName='Helvetica-Oblique',
+            fontSize=7.5,
+            leading=10,
+            textColor=MUTED_TEXT
+        )
         badge_succ = ParagraphStyle(
             'BadgeSucc',
             parent=styles['Normal'],
@@ -654,6 +665,7 @@ class ReportService:
                 Paragraph("Status", th_style)
             ]
             disc_rows = [disc_headers]
+            reason_row_indices: List[int] = []
 
             mg_map = {mg.id: mg for mg in match_groups}
             for d in discrepancies:
@@ -692,7 +704,7 @@ class ReportService:
                     sev_p = Paragraph(f"{sev_str}", badge_info)
 
                 intro_str = d.introduced_at.value if hasattr(d.introduced_at, 'value') else (str(d.introduced_at) if d.introduced_at else "-")
-                status_p = Paragraph(d.status, badge_succ if d.status == "RESOLVED" else body_style)
+                status_p = Paragraph(d.status, badge_succ if d.status in ("ACCEPTED", "ACKNOWLEDGED", "RESOLVED") else body_style)
 
                 disc_rows.append([
                     Paragraph(f"<b>{sku_text}</b>", cell_style),
@@ -705,17 +717,29 @@ class ReportService:
                     status_p
                 ])
 
+                # Reason row: full-width explanation of why this discrepancy was flagged
+                reason_text = d.explanation or "No explanation recorded for this discrepancy."
+                reason_row_idx = len(disc_rows)
+                disc_rows.append([
+                    Paragraph(f"<b>Reason:</b> {reason_text}", reason_style),
+                    "", "", "", "", "", "", ""
+                ])
+                reason_row_indices.append(reason_row_idx)
+
             # Total printable width: 540 pt
             disc_table = Table(disc_rows, colWidths=[70, 75, 65, 65, 65, 60, 70, 70], repeatRows=1)
-            disc_table.setStyle(TableStyle([
+            table_style_cmds = [
                 ('BACKGROUND', (0,0), (-1,0), PRIMARY),
                 ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
                 ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('TOPPADDING', (0,0), (-1,-1), 3),
                 ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, BG_LIGHT])
-            ]))
+            ]
+            for idx in reason_row_indices:
+                table_style_cmds.append(('SPAN', (0, idx), (-1, idx)))
+                table_style_cmds.append(('BACKGROUND', (0, idx), (-1, idx), BG_LIGHT))
+            disc_table.setStyle(TableStyle(table_style_cmds))
             elements.append(disc_table)
 
         elements.append(Spacer(1, 10))

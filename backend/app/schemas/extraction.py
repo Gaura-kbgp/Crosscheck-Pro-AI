@@ -13,6 +13,10 @@ class ExtractionResponse(BaseModel):
     model_name: str
     prompt_version: str
     confidence: Optional[Dict[str, Any]] = None
+    attempt: int = 1
+    is_latest: bool = True
+    extraction_version: Optional[str] = None
+    document_hash: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -29,6 +33,7 @@ class CanonicalLineItemResponse(BaseModel):
     item_category: Optional[ItemCategory] = None
     category_confidence: Optional[float] = None
     category_evidence: Optional[Any] = None
+    cabinet_classification: Optional[Any] = None
     quantity: Optional[int] = None
     dimensions: Optional[Any] = None
     finish: Optional[str] = None
@@ -68,6 +73,8 @@ class DesignExtractionItem(BaseModel):
     drawing_reference: Optional[str] = None
     notes: Optional[str] = None
     confidence: Optional[float] = None
+    page_number: Optional[int] = None
+    source_text: Optional[str] = None
 
 class DesignExtraction(BaseModel):
     items: List[DesignExtractionItem]
@@ -86,6 +93,8 @@ class OrderExtractionItem(BaseModel):
     source_reference: Optional[str] = None
     price: Optional[str] = None
     confidence: Optional[float] = None
+    page_number: Optional[int] = None
+    source_text: Optional[str] = None
 
 class OrderExtraction(BaseModel):
     items: List[OrderExtractionItem]
@@ -106,6 +115,19 @@ class AcknowledgementExtractionItem(BaseModel):
     line_number: Optional[str] = None
     source_reference: Optional[str] = None
     confidence: Optional[float] = None
+    page_number: Optional[int] = None
+    source_text: Optional[str] = None
 
 class AcknowledgementExtraction(BaseModel):
     items: List[AcknowledgementExtractionItem]
+
+class SpecBookCodeExtractionItem(BaseModel):
+    code: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    confidence: Optional[float] = None
+    page_number: Optional[int] = None
+    source_text: Optional[str] = None
+
+class SpecBookCodeExtraction(BaseModel):
+    items: List[SpecBookCodeExtractionItem]

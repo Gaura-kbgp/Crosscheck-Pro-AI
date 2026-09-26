@@ -1,12 +1,13 @@
 "use client";
 
-import React, { use, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { useParams } from "next/navigation";
+import { ArrowLeft, CheckCircle2, CheckCheck } from "lucide-react";
 import { useProject } from "@/lib/hooks/use-projects";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { useCrossCheckConfig } from "@/lib/hooks/use-crosscheck-preferences";
-import { useFinalizeProject } from "@/lib/hooks/use-reviews";
+import { useFinalizeProject, useBulkAcceptNonCritical } from "@/lib/hooks/use-reviews";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/feedback/error-state";
@@ -19,13 +20,9 @@ import { ReviewDetailDrawer } from "@/components/review/review-detail-drawer";
 import { Discrepancy, MatchGroup } from "@/lib/api/types";
 import { FinalizeProjectDialog } from "@/components/projects/finalize-project-dialog";
 
-export default function ReviewPage({
-  params,
-}: {
-  params: Promise<{ projectId: string }>;
-}) {
-  const resolvedParams = use(params);
-  const projectId = resolvedParams.projectId;
+export default function ReviewPage() {
+  const params = useParams();
+  const projectId = (params?.projectId as string) || "";
 
   const { profile } = useAuthStore();
   const canManage = profile?.role === "ADMIN" || profile?.role === "REVIEWER";
@@ -44,9 +41,27 @@ export default function ReviewPage({
   } = useCrossCheck(projectId);
 
   const { config: crossCheckConfig } = useCrossCheckConfig();
+  const bulkAcceptMutation = useBulkAcceptNonCritical(projectId);
 
   const [selectedDiscrepancyId, setSelectedDiscrepancyId] = useState<string | null>(null);
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+
+  const handleBulkAccept = async () => {
+    const confirmed = window.confirm(
+      "Accept all OPEN Warning/High/Info findings? Critical findings are never bulk-accepted and still need individual review."
+    );
+    if (!confirmed) return;
+    try {
+      const res = await bulkAcceptMutation.mutateAsync(undefined);
+      toast.success(
+        res.accepted_count > 0
+          ? `Accepted ${res.accepted_count} non-critical finding${res.accepted_count === 1 ? "" : "s"}.`
+          : "No open non-critical findings to accept."
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to bulk accept findings");
+    }
+  };
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -166,17 +181,28 @@ export default function ReviewPage({
         </div>
 
         {canManage && !isFinalized && (
-          <Button 
-            className="bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold shadow-xs"
-            onClick={() => setFinalizeDialogOpen(true)}
-            leftIcon={<CheckCircle2 className="h-4 w-4" />}
-          >
-            Finalize Project
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="border-[#DCE6F0] text-[#0F2747] font-semibold"
+              onClick={handleBulkAccept}
+              isLoading={bulkAcceptMutation.isPending}
+              leftIcon={<CheckCheck className="h-4 w-4" />}
+            >
+              Accept All Non-Critical
+            </Button>
+            <Button
+              className="bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold shadow-xs"
+              onClick={() => setFinalizeDialogOpen(true)}
+              leftIcon={<CheckCircle2 className="h-4 w-4" />}
+            >
+              Finalize Project
+            </Button>
+          </div>
         )}
       </div>
 
-      <ReviewSummary discrepancies={discrepanciesWithGroup} />
+      <ReviewSummary summary={crosscheck.discrepancySummary} />
 
       <div className="bg-white border border-[#DCE6F0] rounded-xl shadow-2xs overflow-hidden">
         <ReviewFilters 
@@ -193,12 +219,17 @@ export default function ReviewPage({
         />
       </div>
 
-      <ReviewDetailDrawer 
+      <ReviewDetailDrawer
         discrepancy={selectedDiscrepancy}
         group={selectedDiscrepancy?.group || null}
         projectId={projectId}
         isOpen={!!selectedDiscrepancyId}
         onClose={() => setSelectedDiscrepancyId(null)}
+        onNext={() => {
+          const idx = filteredDiscrepancies.findIndex(d => d.id === selectedDiscrepancyId);
+          const next = idx >= 0 ? filteredDiscrepancies[idx + 1] : undefined;
+          setSelectedDiscrepancyId(next ? next.id : null);
+        }}
         readOnly={!canManage || isFinalized}
       />
 

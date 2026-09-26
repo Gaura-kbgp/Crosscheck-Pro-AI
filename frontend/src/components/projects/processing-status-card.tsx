@@ -20,6 +20,8 @@ interface ProcessingStatusCardProps {
   projectId?: string;
   onRetry?: () => void;
   onDismiss?: () => void;
+  onCancel?: () => void;
+  isCancelling?: boolean;
   className?: string;
 }
 
@@ -44,6 +46,8 @@ export function ProcessingStatusCard({
   projectId,
   onRetry,
   onDismiss,
+  onCancel,
+  isCancelling,
   className,
 }: ProcessingStatusCardProps) {
   const isFailed = status === "FAILED";
@@ -60,6 +64,13 @@ export function ProcessingStatusCard({
     };
 
   const rawErrorStr = typeof error === "string" ? error : JSON.stringify(error || {});
+  // F8.3: non-fatal, per-document extraction completeness warnings. Present
+  // only when the job COMPLETED but a document couldn't be fully verified
+  // (empty extraction, line-number gaps) — never a failure, just a review flag.
+  const extractionWarnings: { document_type: string; issues?: { message: string }[] }[] =
+    error && Array.isArray((error as Record<string, unknown>).warnings)
+      ? ((error as Record<string, unknown>).warnings as { document_type: string; issues?: { message: string }[] }[])
+      : [];
   const isGeminiQuotaError =
     rawErrorStr.includes("RESOURCE_EXHAUSTED") ||
     rawErrorStr.includes("prepayment credits") ||
@@ -145,6 +156,19 @@ export function ProcessingStatusCard({
               <span>Retry with OpenAI GPT-4o</span>
             </Button>
           )}
+
+          {isRunning && onCancel && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="font-semibold border-[#FECACA] text-[#DC2626] hover:bg-[#FEE2E2] gap-1.5"
+            >
+              <X className="h-4 w-4" />
+              <span>{isCancelling ? "Cancelling..." : "Cancel"}</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -221,6 +245,24 @@ export function ProcessingStatusCard({
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* F8.3: Completed with extraction warnings — pipeline finished, but one or
+          more documents could not be fully verified and should be reviewed. */}
+      {isCompleted && extractionWarnings.length > 0 && (
+        <div className="rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-3.5 text-xs text-[#92400E] space-y-2">
+          <p className="font-bold">
+            Extraction completed. Please review the flagged items below before finalizing.
+          </p>
+          <ul className="space-y-1.5">
+            {extractionWarnings.map((w, i) => (
+              <li key={i}>
+                <span className="font-semibold">{w.document_type}:</span>{" "}
+                {(w.issues || []).map((iss) => iss.message).join(" ")}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

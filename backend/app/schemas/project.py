@@ -8,12 +8,14 @@ class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1)
     customer_name: Optional[str] = None
     dealer_name: Optional[str] = None
+    manufacturer_id: Optional[UUID4] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1)
     customer_name: Optional[str] = None
     dealer_name: Optional[str] = None
     status: Optional[ProjectStatus] = None
+    manufacturer_id: Optional[UUID4] = None
 
 class ProjectResponse(BaseModel):
     id: UUID4
@@ -21,6 +23,8 @@ class ProjectResponse(BaseModel):
     name: str
     customer_name: Optional[str] = None
     dealer_name: Optional[str] = None
+    manufacturer_id: Optional[UUID4] = None
+    manufacturer_name: Optional[str] = None
     status: ProjectStatus
     document_count: int = 0
     uploaded_document_types: List[str] = Field(default_factory=list)

@@ -13,6 +13,26 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Project, ProjectCreateInput, ProjectUpdateInput } from "@/lib/api/types";
 import { Building2, FolderKanban, AlertTriangle, Trash2 } from "lucide-react";
+import { useManufacturers } from "@/lib/hooks/use-manufacturers";
+
+function ManufacturerSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: manufacturers } = useManufacturers();
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-[#0F2747] mb-1">Manufacturer</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-[#DCE6F0] bg-white px-3 py-2 text-sm text-[#0F2747] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-colors"
+      >
+        <option value="">Not specified</option>
+        {(manufacturers || []).map((m) => (
+          <option key={m.id} value={m.id}>{m.name}{m.is_global ? " (Global)" : ""}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -33,6 +53,7 @@ function CreateProjectForm({
   const [name, setName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [dealerName, setDealerName] = useState("");
+  const [manufacturerId, setManufacturerId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,6 +68,7 @@ function CreateProjectForm({
         name: name.trim(),
         customer_name: customerName.trim() || undefined,
         dealer_name: dealerName.trim() || undefined,
+        manufacturer_id: manufacturerId || null,
       });
       onClose();
     } catch (err: unknown) {
@@ -130,6 +152,8 @@ function CreateProjectForm({
           </div>
         </div>
 
+        <ManufacturerSelect value={manufacturerId} onChange={setManufacturerId} />
+
         <DialogFooter>
           <Button
             type="button"
@@ -193,6 +217,7 @@ function EditProjectForm({
   const [name, setName] = useState(project.name || "");
   const [customerName, setCustomerName] = useState(project.customer_name || "");
   const [dealerName, setDealerName] = useState(project.dealer_name || "");
+  const [manufacturerId, setManufacturerId] = useState(project.manufacturer_id || "");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -207,6 +232,7 @@ function EditProjectForm({
         name: name.trim(),
         customer_name: customerName.trim() || undefined,
         dealer_name: dealerName.trim() || undefined,
+        manufacturer_id: manufacturerId || null,
       });
       onClose();
     } catch (err: unknown) {
@@ -289,6 +315,8 @@ function EditProjectForm({
             />
           </div>
         </div>
+
+        <ManufacturerSelect value={manufacturerId} onChange={setManufacturerId} />
 
         <DialogFooter>
           <Button
