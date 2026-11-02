@@ -164,6 +164,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               organization_name: data.organization_name,
               business_role: data.business_role,
             },
+            // Without this, Supabase falls back to its dashboard "Site URL"
+            // for the confirm-signup link regardless of where the user
+            // actually signed up — on production that defaulted to
+            // localhost:3000. Match the real origin, like forgot-password
+            // and Google OAuth already do.
+            emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/login` : undefined,
           },
         });
 

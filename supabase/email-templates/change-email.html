@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Confirm your new email address</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 30px;">
+  <div style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div style="margin-bottom: 24px;">
+      <span style="font-size: 20px; font-weight: bold; color: #0f172a;">CrossCheck<span style="color: #0284c7;">Pro</span></span>
+    </div>
+    <h2 style="font-size: 18px; font-weight: 600; color: #0f172a; margin-top: 0;">Confirm your new email address</h2>
+    <p style="font-size: 14px; color: #475569; line-height: 1.6;">Hi there,</p>
+    <p style="font-size: 14px; color: #475569; line-height: 1.6;">We received a request to change the email address on your CrossCheckPro account from {{ .Email }} to <strong>{{ .NewEmail }}</strong>. Confirm the change below.</p>
+    <div style="margin: 28px 0;">
+      <a href="{{ .ConfirmationURL }}" style="background-color: #0284c7; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; display: inline-block;">Confirm New Email</a>
+    </div>
+    <p style="font-size: 12px; color: #94a3b8; line-height: 1.5;">If the button above doesn't work, copy and paste this URL into your browser:<br><a href="{{ .ConfirmationURL }}" style="color: #0284c7; word-break: break-all;">{{ .ConfirmationURL }}</a></p>
+    <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;">
+    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">If you did not request this change, please contact support immediately — someone else may have access to your account.</p>
+  </div>
+</body>
+</html>
