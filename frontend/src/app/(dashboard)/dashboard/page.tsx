@@ -4,10 +4,12 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
+import { useOrganization } from "@/lib/hooks/use-organization";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { ProcessingActivityChart } from "@/components/dashboard/processing-activity-chart";
 import { RecentProjectsCard } from "@/components/dashboard/recent-projects-card";
+import { RoleOnboardingBanner } from "@/components/dashboard/role-onboarding-banner";
 import { ErrorState } from "@/components/feedback/error-state";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -45,9 +47,15 @@ export default function DashboardPage() {
     error,
     refetch,
   } = useDashboard(timeframe);
+  const { data: organization } = useOrganization();
 
   const greeting = getGreeting();
   const firstName = getUserFirstName(profile?.email || user?.email);
+  // Section 03 "how each role should move through the tool": show the
+  // role-specific first step only until this org has a real (non-sample)
+  // project — after that they already know their way around.
+  const hasRealProject = metrics.recentProjects.some((p) => !p.is_sample);
+  const showRoleOnboarding = !isLoading && !!organization?.business_role && !hasRealProject;
 
   if (error) {
     return (
@@ -86,6 +94,10 @@ export default function DashboardPage() {
           </Link>
         }
       />
+
+      {showRoleOnboarding && organization?.business_role && (
+        <RoleOnboardingBanner businessRole={organization.business_role} />
+      )}
 
       {/* KPI Cards */}
       <section aria-label="Key Performance Indicators">

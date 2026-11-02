@@ -3,7 +3,21 @@ from fastapi.responses import JSONResponse
 import structlog
 import uuid
 
+from app.core.config import settings
+
 logger = structlog.get_logger(__name__)
+
+def _cors_headers_for(request: Request) -> dict:
+    """Starlette routes a handler registered for the bare `Exception` class
+    (unhandled_exception_handler) through ServerErrorMiddleware, which sits
+    OUTSIDE CORSMiddleware — so normal 500s never get CORS headers, and the
+    browser reports "blocked by CORS policy" instead of the real error (see
+    TESTING_REVIEW_FIXLIST.md P0-1 and the JIT-provisioning race it
+    uncovered). Add the same header CORSMiddleware would, by hand."""
+    origin = request.headers.get("origin")
+    if origin and origin in settings.resolved_cors_origins:
+        return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true"}
+    return {}
 
 class BaseAPIException(Exception):
     def __init__(self, message: str, code: str = "INTERNAL_ERROR", status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR, details: dict = None):
@@ -48,5 +62,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
                 "details": {},
                 "request_id": request_id
             }
-        }
+        },
+        headers=_cors_headers_for(request),
     )

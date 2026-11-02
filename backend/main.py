@@ -18,20 +18,9 @@ app = FastAPI(
 # Always include the known production + local dev origins as a fallback, so a
 # missing/misconfigured CORS_ORIGINS env var on the host (e.g. Render) can never
 # silently lock every user out of auth (see TESTING_REVIEW_FIXLIST.md P0-1).
-cors_origins = list(set(settings.cors_origins_list + [
-    "https://crosscheck-pro-ai-tool.onrender.com",
-    "https://crosscheckpro.ai",
-    "https://www.crosscheckpro.ai",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000"
-]))
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.resolved_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

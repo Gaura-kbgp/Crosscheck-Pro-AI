@@ -67,6 +67,47 @@ app — a blocked preflight never gets that far, so this fix is frontend-side.
 
 ---
 
+## Not in the original review — found while live-testing P1-4's role onboarding
+
+### JIT user-provisioning race condition on first login — `FIXED` (verified live)
+While live-testing the new role-aware dashboard onboarding banner (below), a brand-new
+account's **very first** page load intermittently failed: the browser console showed
+`blocked by CORS policy` on `GET /organizations/me` / `GET /users/me`, identical-looking to
+P0-1's symptom but with CORS already fixed.
+
+**Root cause:** `get_current_user` (`app/api/dependencies.py`) auto-provisions a `User` +
+`Organization` row the first time a Supabase-authenticated request arrives for an auth_id with
+no matching row yet ("JIT provisioning"). The frontend fires `GET /users/me` and
+`GET /organizations/me` together right after login — both see "no user yet" and race to
+`INSERT`. The loser hits `users.auth_id`'s unique constraint, which was unhandled → a bare 500.
+Confirmed by concurrent-request testing against 4 fresh accounts: the loser consistently got a
+500 before the fix.
+
+**Separate compounding bug:** that 500 never carried CORS headers. Starlette routes a handler
+registered for the bare `Exception` class through `ServerErrorMiddleware`, which sits *outside*
+`CORSMiddleware` — so every unhandled-exception response, not just this race, was CORS-header-
+less, and the browser reported a misleading "CORS blocked" instead of the real 500. Confirmed via
+direct `curl`: the 500 response had no `Access-Control-Allow-Origin` header even with a valid,
+allow-listed `Origin`.
+
+**Fix applied:**
+- `app/api/dependencies.py`: catch `IntegrityError` on the provisioning commit, roll back, and
+  re-query for the row the winner just created instead of crashing.
+- `app/core/exceptions.py`: `unhandled_exception_handler` now adds
+  `Access-Control-Allow-Origin`/`-Allow-Credentials` by hand when the request's `Origin` is
+  allow-listed, so a real 500 reaches the browser as a 500, not a confusing CORS failure.
+- `app/core/config.py`: the hardcoded origin fallback list (previously only in `main.py`) is now
+  `settings.resolved_cors_origins`, a single source of truth both `main.py` and
+  `exceptions.py` use.
+
+**Verified live:** re-ran concurrent `organizations/me` + `users/me` requests against 4 separate
+fresh Supabase accounts after the fix — all 8 requests returned `200` with matching
+organization/user ids and a correct CORS header; reproduced the original failure beforehand on
+an unpatched run for comparison. Also confirmed end-to-end through the real browser UI (see
+P1-4 below) — a fresh signup's dashboard now loads correctly on the first request, every time.
+
+---
+
 ## Not in the original review — found while live-testing P1-1/P1-2
 
 ### AI provider resilience — `FIXED`
@@ -218,7 +259,7 @@ correctly rejected with `400: PDF page count (150) exceeds maximum limit of 100 
 the fix is scoped correctly and didn't loosen the wrong path. All 25 existing spec-book/NKBA
 tests still pass.
 
-### P1-4. No role selection at signup — `IN PROGRESS` (data capture done + verified)
+### P1-4. No role selection at signup — `FIXED` (scoped down, verified live)
 **Symptom:** signup only asks name/email/password — no "I am a: Designer / Dealer /
 Manufacturer" + company name, so there's no role-appropriate first-run experience.
 
@@ -247,12 +288,30 @@ and had never been updated to include the new field, so it silently returned `bu
 null` regardless of the real DB value — fixed both occurrences, re-verified the API now returns
 the correct value end-to-end (register → DB → login → `GET /organizations/me`).
 
-**Remaining:** routing each role to its own first step (Designer → upload drawing, Dealer →
-create job & invite, Manufacturer → load catalog & upload ack) per the review's section 03 flow
-diagram. This needs more than data capture — the review's flow assumes a dealer can "invite"
-designer/manufacturer collaborators to a shared job, which isn't built yet. Honest scope for
-now: role + company name are captured and will drive role-aware defaults once that invite
-system exists; a full per-role onboarding wizard is a larger feature, not a quick addition.
+**Scope decision on the cross-org invite flow (2026-11-02):** the review's section 03 flow
+diagram has a Dealer "invite" a Designer/Manufacturer *from a different company* into their job.
+Investigating this properly before building it: `organization_id`-scoped tenant isolation is
+hard-coded at the row level across every table a project touches (Project, Document,
+Discrepancy, MatchGroup, CanonicalLineItem, HumanReview, AuditLog, Report — 6+ services, dozens
+of call sites), not just at the project level. A real cross-org invite needs a rewrite of that
+authorization model everywhere, which is a correctness/security-critical change (get it wrong
+and one company's data becomes visible to another's) — explained to the user and **deliberately
+descoped** rather than attempted half-safe in one pass. Flagged as a separate, larger piece of
+work if/when wanted.
+
+**What was built instead (role-aware first-step onboarding, single-org, verified live):**
+`RoleOnboardingBanner` (`frontend/src/components/dashboard/role-onboarding-banner.tsx`) on the
+Dashboard shows each business role its one-line "first job" from section 03 — Designer: upload a
+drawing; Dealer: create a job and upload the order; Manufacturer: load the catalog, then upload
+the acknowledgement — with a CTA into Projects. It only shows until the org has a real
+(non-sample) project; after that it disappears, since by then the user already knows their way
+around.
+
+**Live-tested 2026-11-02** against three fresh accounts (Designer/Dealer/Manufacturer, created
+and logged in through the real signup/login flow): each showed its own correct role copy, and
+the banner correctly disappeared immediately after creating a real project via the actual
+"Create Your First Project" button. This testing is what surfaced the JIT-provisioning race
+condition documented above — all test accounts and org/project rows were cleaned up afterward.
 
 ---
 

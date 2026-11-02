@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from typing import Generator
 
 from app.db.session import SessionLocal
@@ -75,7 +76,30 @@ def get_current_user(
                 is_verified=True,
             )
             db.add(user)
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # A brand-new user's first authenticated request is often two
+                # concurrent calls (e.g. the frontend fetching the profile and
+                # the organization at once) — both see "no user yet" and race
+                # to insert. The loser hits auth_id's unique constraint here;
+                # instead of crashing with a 500, fall back to the row the
+                # winner just created.
+                db.rollback()
+                user = db.execute(stmt).scalar_one_or_none()
+                if not user:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="User not found in database"
+                    )
+                return AuthenticatedUser(
+                    user_id=user.id,
+                    organization_id=user.organization_id,
+                    role=user.role,
+                    auth_id=user.auth_id,
+                    email=user.email,
+                    full_name=user.full_name,
+                )
             db.refresh(user)
 
             # P2-1: pre-checked sample project so the first screen is never

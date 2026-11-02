@@ -69,6 +69,24 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
+    @property
+    def resolved_cors_origins(self) -> List[str]:
+        """The full allow-list CORSMiddleware is configured with: the env var
+        plus hardcoded production/local fallbacks (see main.py / P0-1). Single
+        source of truth so app/core/exceptions.py can add the same
+        Access-Control-Allow-Origin header on 500 responses, which never pass
+        through CORSMiddleware — see unhandled_exception_handler."""
+        return list(set(self.cors_origins_list + [
+            "https://crosscheck-pro-ai-tool.onrender.com",
+            "https://crosscheckpro.ai",
+            "https://www.crosscheckpro.ai",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]))
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
