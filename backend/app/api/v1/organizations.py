@@ -33,6 +33,7 @@ def get_my_organization(
     return OrganizationResponse(
         id=org.id,
         name=org.name,
+        business_role=org.business_role,
         settings=org.settings or {},
         created_at=org.created_at,
         updated_at=org.updated_at,
@@ -74,6 +75,7 @@ def update_my_organization(
     return OrganizationResponse(
         id=org.id,
         name=org.name,
+        business_role=org.business_role,
         settings=org.settings or {},
         created_at=org.created_at,
         updated_at=org.updated_at,

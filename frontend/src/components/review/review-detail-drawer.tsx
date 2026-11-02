@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Discrepancy, MatchGroup, ReviewActionType, SourceEvidence, CabinetClassification } from "@/lib/api/types";
-import { X, ArrowRight, CheckCircle, XCircle, AlertTriangle, MessageSquareWarning, Edit3 } from "lucide-react";
+import { X, ArrowRight, CheckCircle, XCircle, AlertTriangle, MessageSquareWarning, Edit3, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -155,6 +155,15 @@ export function ReviewDetailDrawer({
                   <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
                 </div>
               </div>
+
+              {discrepancy.explanation && (
+                <div className="px-5 pb-5">
+                  <div className="flex items-start gap-2.5 rounded-lg border border-sky-100 bg-sky-50 p-3">
+                    <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-[#0F2747] leading-relaxed">{discrepancy.explanation}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Review Actions (only if not readOnly and not fully resolved, though we can allow override always if needed, but usually we hide/disable if readOnly) */}

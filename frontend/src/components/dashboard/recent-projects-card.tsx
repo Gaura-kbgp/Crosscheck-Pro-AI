@@ -32,7 +32,7 @@ export function RecentProjectsCard({
             Recent Projects
           </CardTitle>
           <CardDescription>
-            Latest construction project documents and statuses
+            Latest cabinet order documents and statuses
           </CardDescription>
         </div>
         <Link

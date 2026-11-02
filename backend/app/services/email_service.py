@@ -55,7 +55,7 @@ class EmailService:
         verification_link = f"{self.frontend_url}/verify-email?token={token}"
         name = full_name or "there"
 
-        subject = "Verify your email address — CrossCheckPro"
+        subject = "Verify your email address - CrossCheckPro"
         
         text_body = f"""Hi {name},
 
@@ -83,7 +83,7 @@ If you did not create an account, you can safely ignore this email.
     </div>
     <h2 style="font-size: 18px; font-weight: 600; color: #0f172a; margin-top: 0;">Verify your email address</h2>
     <p style="font-size: 14px; color: #475569; line-height: 1.6;">Hi {name},</p>
-    <p style="font-size: 14px; color: #475569; line-height: 1.6;">Thank you for signing up for CrossCheckPro. Please verify your email address to access your construction document intelligence workspace.</p>
+    <p style="font-size: 14px; color: #475569; line-height: 1.6;">Thank you for signing up for CrossCheckPro. Please verify your email address to access your cabinet order verification workspace.</p>
     <div style="margin: 28px 0;">
       <a href="{verification_link}" style="background-color: #0284c7; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; display: inline-block;">Verify Email Address</a>
     </div>
@@ -101,7 +101,7 @@ If you did not create an account, you can safely ignore this email.
         reset_link = f"{self.frontend_url}/reset-password?token={token}"
         name = full_name or "there"
 
-        subject = "Reset your password — CrossCheckPro"
+        subject = "Reset your password - CrossCheckPro"
         
         text_body = f"""Hi {name},
 

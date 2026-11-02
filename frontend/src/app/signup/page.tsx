@@ -21,12 +21,27 @@ import {
   User,
   ArrowRight,
   Inbox,
+  Building2,
+  PencilRuler,
+  Handshake,
+  Factory,
 } from "lucide-react";
+import type { BusinessRole } from "@/lib/api/types";
+
+const BUSINESS_ROLES: { value: BusinessRole; label: string; description: string; icon: typeof PencilRuler }[] = [
+  { value: "DESIGNER", label: "Designer", description: "I create the drawings", icon: PencilRuler },
+  { value: "DEALER", label: "Dealer", description: "I place the order", icon: Handshake },
+  { value: "MANUFACTURER", label: "Manufacturer", description: "I confirm the order", icon: Factory },
+];
 
 const signupSchema = z
   .object({
     fullName: z.string().min(2, "Full name must be at least 2 characters"),
     email: z.string().min(1, "Email is required").email("Please enter a valid email"),
+    businessRole: z.enum(["DESIGNER", "DEALER", "MANUFACTURER"], {
+      errorMap: () => ({ message: "Please select which role describes you" }),
+    }),
+    organizationName: z.string().optional(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
@@ -46,10 +61,13 @@ export default function SignupPage() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
   });
+  const selectedRole = watch("businessRole");
 
   const onSubmit = async (data: SignupFormData) => {
     setFormError(null);
@@ -59,6 +77,8 @@ export default function SignupPage() {
         password: data.password,
         confirm_password: data.confirmPassword,
         full_name: data.fullName,
+        organization_name: data.organizationName || undefined,
+        business_role: data.businessRole,
       });
       setRegisteredEmail(res.email || data.email);
       setIsSuccess(true);
@@ -106,7 +126,7 @@ export default function SignupPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl leading-tight">
-            Document Intelligence for Construction Projects
+            Check Every Cabinet Order Against the Drawing and the Factory Acknowledgement
           </h1>
 
           <p className="text-base text-slate-300 leading-relaxed">
@@ -199,7 +219,7 @@ export default function SignupPage() {
                   Create Account
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Start verifying construction orders with automated intelligence.
+                  Start verifying cabinet orders with automated intelligence.
                 </p>
               </div>
 
@@ -313,6 +333,60 @@ export default function SignupPage() {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    I am a...
+                  </label>
+                  <input type="hidden" {...register("businessRole")} />
+                  <div className="grid grid-cols-3 gap-2">
+                    {BUSINESS_ROLES.map(({ value, label, description, icon: Icon }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setValue("businessRole", value, { shouldValidate: true })}
+                        className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors ${
+                          selectedRole === value
+                            ? "border-sky-600 bg-sky-50 ring-1 ring-sky-600"
+                            : "border-slate-200 bg-white hover:border-slate-300"
+                        }`}
+                      >
+                        <Icon className={`h-4 w-4 ${selectedRole === value ? "text-sky-600" : "text-slate-400"}`} />
+                        <span className={`text-xs font-semibold ${selectedRole === value ? "text-sky-700" : "text-slate-700"}`}>
+                          {label}
+                        </span>
+                        <span className="text-[10px] text-slate-400 leading-tight">{description}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {errors.businessRole && (
+                    <p className="mt-1 text-xs text-rose-600">
+                      {errors.businessRole.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="organizationName"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                  >
+                    Company Name <span className="text-slate-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="relative">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <input
+                      id="organizationName"
+                      type="text"
+                      autoComplete="organization"
+                      placeholder="Acme Cabinets"
+                      className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors"
+                      {...register("organizationName")}
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <label
                     htmlFor="password"
                     className="block text-xs font-semibold text-slate-700 mb-1"
@@ -327,7 +401,7 @@ export default function SignupPage() {
                       id="password"
                       type="password"
                       autoComplete="new-password"
-                      placeholder="••••••••"
+                      placeholder="Password"
                       className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
                         errors.password ? "border-rose-500" : "border-slate-200"
                       }`}
@@ -356,7 +430,7 @@ export default function SignupPage() {
                       id="confirmPassword"
                       type="password"
                       autoComplete="new-password"
-                      placeholder="••••••••"
+                      placeholder="Confirm Password"
                       className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
                         errors.confirmPassword ? "border-rose-500" : "border-slate-200"
                       }`}

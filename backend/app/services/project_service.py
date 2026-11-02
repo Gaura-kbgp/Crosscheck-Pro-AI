@@ -82,6 +82,7 @@ class ProjectService:
             discrepancy_count=total_disc,
             resolved_discrepancy_count=resolved_disc,
             progress_percentage=progress_pct,
+            is_sample=project.is_sample,
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
@@ -160,6 +161,7 @@ class ProjectService:
                     discrepancy_count=total_disc,
                     resolved_discrepancy_count=resolved_disc,
                     progress_percentage=progress_pct,
+                    is_sample=p.is_sample,
                     created_at=p.created_at,
                     updated_at=p.updated_at,
                 )

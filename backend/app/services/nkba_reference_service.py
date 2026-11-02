@@ -56,8 +56,8 @@ class NKBAReferenceService:
             pdf_doc = fitz.open(stream=content, filetype="pdf")
             page_count = pdf_doc.page_count
             pdf_doc.close()
-            if page_count > settings.MAX_PDF_PAGES:
-                raise BusinessLogicError(f"PDF page count ({page_count}) exceeds maximum limit of {settings.MAX_PDF_PAGES} pages")
+            if page_count > settings.MAX_CATALOG_PDF_PAGES:
+                raise BusinessLogicError(f"PDF page count ({page_count}) exceeds maximum limit of {settings.MAX_CATALOG_PDF_PAGES} pages")
         except BusinessLogicError:
             raise
         except Exception as e:

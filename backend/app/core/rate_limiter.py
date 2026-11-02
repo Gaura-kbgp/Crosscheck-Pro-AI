@@ -26,7 +26,7 @@ class RateLimiter:
     def _check_redis(self, key: str) -> bool:
         try:
             import redis
-            client = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=1.0)
+            client = redis.Redis.from_url(settings.REDIS_URL, socket_timeout=1.0, socket_connect_timeout=1.0)
             current = client.incr(key)
             if current == 1:
                 client.expire(key, self.window_seconds)
@@ -69,3 +69,6 @@ class RateLimiter:
                 detail="Too many requests. Please try again later.",
                 headers={"Retry-After": str(self.window_seconds)}
             )
+
+
+

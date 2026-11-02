@@ -143,6 +143,11 @@ export function ProjectTable({
                           className="text-[14px] font-bold text-[#0F2747] hover:text-[#0284C7] transition-colors flex items-center gap-1.5 truncate"
                         >
                           {project.name}
+                          {project.is_sample && (
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+                              Sample
+                            </span>
+                          )}
                           <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 text-[#0284C7] transition-opacity shrink-0" />
                         </Link>
                         {metaParts.length > 0 ? (

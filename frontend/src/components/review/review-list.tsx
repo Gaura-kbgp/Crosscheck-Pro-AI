@@ -1,6 +1,7 @@
 import React from "react";
 import { Discrepancy, MatchGroup } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ChevronRight, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDisplayValue } from "@/lib/utils/formatters";
@@ -91,13 +92,18 @@ function ReviewListItem({ discrepancy, onClick }: { discrepancy: DiscrepancyWith
           </span>
         </div>
         
-        <div className="mt-1 flex items-center gap-2 text-xs text-[#58708F] truncate">
-          <span>Design: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.design_value)}</span></span>
-          <ChevronRight className="h-3 w-3 text-slate-300" />
-          <span>Order: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.order_value)}</span></span>
-          <ChevronRight className="h-3 w-3 text-slate-300" />
-          <span>Ack: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.ack_value)}</span></span>
-        </div>
+        <Tooltip
+          content={discrepancy.explanation}
+          className="mt-1 w-full"
+        >
+          <div className="flex items-center gap-2 text-xs text-[#58708F] truncate cursor-help">
+            <span>Design: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.design_value)}</span></span>
+            <ChevronRight className="h-3 w-3 text-slate-300" />
+            <span>Order: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.order_value)}</span></span>
+            <ChevronRight className="h-3 w-3 text-slate-300" />
+            <span>Ack: <span className="font-mono font-medium text-[#0F2747]">{formatDisplayValue(discrepancy.ack_value)}</span></span>
+          </div>
+        </Tooltip>
       </div>
 
       <div className="shrink-0 flex items-center justify-end">

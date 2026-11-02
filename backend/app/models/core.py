@@ -11,6 +11,16 @@ class Role(str, enum.Enum):
     REVIEWER = "REVIEWER"
     VIEWER = "VIEWER"
 
+class BusinessRole(str, enum.Enum):
+    """
+    Which side of the cabinet-order workflow this organization represents
+    (Design / Order / Acknowledgement). Distinct from Role (ADMIN/REVIEWER/
+    VIEWER), which is in-app permission level, not business function.
+    """
+    DESIGNER = "DESIGNER"
+    DEALER = "DEALER"
+    MANUFACTURER = "MANUFACTURER"
+
 class ProjectStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     PROCESSING = "PROCESSING"
@@ -46,8 +56,9 @@ class Organization(Base):
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
+    business_role = Column(SQLEnum(BusinessRole), nullable=True)
     settings = Column(JSON, default=dict)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -271,6 +282,10 @@ class Project(Base):
     customer_name = Column(String, nullable=True)
     dealer_name = Column(String, nullable=True)
     status = Column(SQLEnum(ProjectStatus), nullable=False, default=ProjectStatus.DRAFT)
+    # P2-1: auto-created once per new organization so the first screen after
+    # signup is never empty. Lets the frontend badge it and exclude it from
+    # real reports/exports.
+    is_sample = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

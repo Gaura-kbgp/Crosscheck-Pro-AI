@@ -858,6 +858,126 @@ class ReportService:
         return buffer.getvalue()
 
     # -------------------------------------------------------------
+    # 2b. Shareable Summary — P2-2: a separate, one-page, actionable-only
+    # report meant to be forwarded to an external party (the manufacturer),
+    # unlike the full audit report above (which is explicitly marked
+    # "Confidential — For Internal Organization Use Only"). Only OPEN/
+    # ESCALATED discrepancies — nothing already resolved — with the
+    # acknowledgement's own line number so the manufacturer can find each
+    # item in their own document.
+    # -------------------------------------------------------------
+    def _get_actionable_discrepancies(self, project_id: uuid.UUID, organization_id: uuid.UUID):
+        project = self.db.scalars(
+            select(Project).where(Project.id == project_id, Project.organization_id == organization_id)
+        ).first()
+        if not project:
+            raise ResourceNotFoundError(message="Project not found")
+
+        severity_order = {"Critical": 0, "CRITICAL": 0, "Warning": 1, "WARNING": 1, "Info": 2, "INFO": 2}
+        discrepancies = self.db.scalars(
+            select(Discrepancy).where(
+                Discrepancy.project_id == project_id,
+                Discrepancy.organization_id == organization_id,
+                Discrepancy.status.in_(["OPEN", "ESCALATED"]),
+            )
+        ).all()
+        discrepancies = sorted(
+            discrepancies,
+            key=lambda d: (severity_order.get(d.severity.value if hasattr(d.severity, "value") else str(d.severity), 3), d.created_at),
+        )
+        return project, discrepancies
+
+    def _actionable_row(self, d: "Discrepancy") -> Dict[str, str]:
+        mg = d.match_group
+        sku = (mg.final_sku if mg and mg.final_sku else None) or "-"
+        ack_line = "-"
+        if mg and mg.ack_item and mg.ack_item.source_metadata:
+            ack_line = mg.ack_item.source_metadata.get("line_number") or "-"
+        severity = d.severity.value if hasattr(d.severity, "value") else str(d.severity)
+        return {
+            "sku": sku,
+            "field": d.field,
+            "design": self._format_val((d.source_values or {}).get("design")),
+            "order": self._format_val((d.source_values or {}).get("order")),
+            "ack": self._format_val((d.source_values or {}).get("acknowledgement")),
+            "ack_line": str(ack_line),
+            "severity": severity,
+            "action": d.explanation or "-",
+        }
+
+    def generate_shareable_summary_csv_data(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> str:
+        project, discrepancies = self._get_actionable_discrepancies(project_id, organization_id)
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([f"CrossCheckPro — Action Items for {project.name}"])
+        writer.writerow(["SKU", "Field", "Design", "Order", "Acknowledgement", "Ack Line #", "Severity", "Action Needed"])
+        for d in discrepancies:
+            row = self._actionable_row(d)
+            writer.writerow([row["sku"], row["field"], row["design"], row["order"], row["ack"], row["ack_line"], row["severity"], row["action"]])
+        return output.getvalue()
+
+    def generate_shareable_summary_pdf_bytes(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> bytes:
+        project, discrepancies = self._get_actionable_discrepancies(project_id, organization_id)
+
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        styles = getSampleStyleSheet()
+
+        PRIMARY = colors.HexColor("#0F172A")
+        MUTED_TEXT = colors.HexColor("#64748B")
+        BORDER_COLOR = colors.HexColor("#E2E8F0")
+        BG_LIGHT = colors.HexColor("#F8FAFC")
+        RED_COLOR = colors.HexColor("#DC2626")
+        AMBER_COLOR = colors.HexColor("#D97706")
+
+        title_style = ParagraphStyle('Title', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=15, leading=19, textColor=PRIMARY, spaceAfter=6)
+        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=12, textColor=MUTED_TEXT, spaceAfter=10)
+        th_style = ParagraphStyle('TH', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=7, leading=8, textColor=colors.white)
+        cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=9, textColor=PRIMARY)
+
+        elements = [
+            Paragraph(f"Action Items — {project.name}", title_style),
+            Paragraph(
+                f"Customer: {project.customer_name or '-'} | Dealer: {project.dealer_name or '-'} | "
+                f"{len(discrepancies)} item(s) need action | Generated {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}",
+                subtitle_style,
+            ),
+        ]
+
+        if not discrepancies:
+            elements.append(Paragraph("No open action items — everything has been reviewed.", cell_style))
+        else:
+            headers = [Paragraph(h, th_style) for h in ["SKU", "Field", "Design", "Order", "Ack", "Line #", "Severity", "Action Needed"]]
+            rows = [headers]
+            for d in discrepancies:
+                r = self._actionable_row(d)
+                sev_color = RED_COLOR if r["severity"].upper() == "CRITICAL" else (AMBER_COLOR if r["severity"].upper() == "WARNING" else MUTED_TEXT)
+                rows.append([
+                    Paragraph(r["sku"], cell_style),
+                    Paragraph(r["field"], cell_style),
+                    Paragraph(r["design"], cell_style),
+                    Paragraph(r["order"], cell_style),
+                    Paragraph(r["ack"], cell_style),
+                    Paragraph(r["ack_line"], cell_style),
+                    Paragraph(f'<font color="{sev_color.hexval()}" size="7"><b>{r["severity"].upper()}</b></font>', cell_style),
+                    Paragraph(r["action"], cell_style),
+                ])
+            table = Table(rows, colWidths=[55, 45, 58, 58, 58, 30, 52, 184], repeatRows=1)
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), PRIMARY),
+                ('BOX', (0, 0), (-1, -1), 1, BORDER_COLOR),
+                ('INNERGRID', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, BG_LIGHT]),
+            ]))
+            elements.append(table)
+
+        doc.build(elements)
+        return buffer.getvalue()
+
+    # -------------------------------------------------------------
     # 3. Asynchronous Execution by Celery Worker
     # -------------------------------------------------------------
     def process_report_job(self, report_id: uuid.UUID) -> Report:

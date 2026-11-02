@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { authApi } from "@/lib/api/endpoints";
 import { getStoredAuthToken, setStoredAuthToken } from "@/lib/api/client";
+import { supabase } from "@/lib/supabase/client";
 import {
   UserProfile,
   LoginInput,
@@ -31,6 +32,11 @@ interface AuthState {
   clearError: () => void;
 }
 
+function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return !!url && !url.includes("placeholder.supabase.co");
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   session: null,
@@ -43,8 +49,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: async () => {
     try {
       set({ isLoading: true, error: null });
-      const storedToken = getStoredAuthToken();
 
+      // 1. Check Supabase session first if configured
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            setStoredAuthToken(session.access_token);
+            set({
+              token: session.access_token,
+              session: { access_token: session.access_token },
+            });
+            await get().fetchProfile();
+            return;
+          }
+        } catch {
+          // If Supabase session fails, fallback to local storage
+        }
+      }
+
+      // 2. Check local storage token
+      const storedToken = getStoredAuthToken();
       if (storedToken) {
         set({
           token: storedToken,
@@ -76,6 +101,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (data: LoginInput) => {
     try {
       set({ isLoading: true, error: null });
+
+      // 1. Try Supabase Auth first if configured
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: sbData, error: sbError } = await supabase.auth.signInWithPassword({
+            email: data.email,
+            password: data.password,
+          });
+
+          if (!sbError && sbData.session?.access_token) {
+            const token = sbData.session.access_token;
+            setStoredAuthToken(token);
+            set({
+              token,
+              session: { access_token: token },
+            });
+            await get().fetchProfile();
+            set({ isLoading: false });
+            return;
+          } else if (sbError && !sbError.message.toLowerCase().includes("invalid login credentials")) {
+            // If it's a specific Supabase error other than invalid credentials, throw it
+            throw sbError;
+          }
+        } catch (sbErr: unknown) {
+          // If Supabase is unreachable or failed, check if backend local auth can handle it
+          console.warn("Supabase auth attempt failed, attempting backend auth fallback:", sbErr);
+        }
+      }
+
+      // 2. Fallback to FastAPI backend login
       const response = await authApi.login(data);
       const token = response.access_token;
       setStoredAuthToken(token);
@@ -97,6 +152,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (data: RegisterInput): Promise<RegisterResponse> => {
     try {
       set({ isLoading: true, error: null });
+
+      // 1. Try Supabase Auth signup if configured
+      if (isSupabaseConfigured()) {
+        const { data: sbData, error: sbError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            data: {
+              full_name: data.full_name,
+              organization_name: data.organization_name,
+              business_role: data.business_role,
+            },
+          },
+        });
+
+        if (sbError) {
+          throw sbError;
+        }
+
+        if (sbData.user) {
+          // If session returned immediately (email confirmation disabled)
+          if (sbData.session?.access_token) {
+            const token = sbData.session.access_token;
+            setStoredAuthToken(token);
+            set({
+              token,
+              session: { access_token: token },
+            });
+            await get().fetchProfile();
+          }
+
+          set({ isLoading: false });
+          return {
+            message: "Registration successful. Please check your email to verify your account.",
+            email: data.email,
+            user_id: sbData.user.id,
+            is_verified: !!sbData.session,
+          };
+        }
+      }
+
+      // 2. Fallback to FastAPI backend registration
       const response = await authApi.register(data);
       set({ isLoading: false });
       return response;
@@ -111,6 +208,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithGoogle: async () => {
     try {
       set({ isLoading: true, error: null });
+
+      if (isSupabaseConfigured()) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+          },
+        });
+        if (error) throw error;
+        return;
+      }
+
+      // Fallback to backend Google OAuth
       const { url } = await authApi.getGoogleAuthUrl();
       if (typeof window !== "undefined" && url) {
         window.location.assign(url);
@@ -126,6 +236,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   handleGoogleCallback: async (code: string) => {
     try {
       set({ isLoading: true, error: null });
+
+      // 1. If Supabase configured, exchange code for session or get session
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data.session?.access_token) {
+            const token = data.session.access_token;
+            setStoredAuthToken(token);
+            set({
+              token,
+              session: { access_token: token },
+            });
+            await get().fetchProfile();
+            set({ isLoading: false });
+            return;
+          }
+        } catch {
+          // If exchangeCodeForSession is not needed or fails, try getSession
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            const token = session.access_token;
+            setStoredAuthToken(token);
+            set({
+              token,
+              session: { access_token: token },
+            });
+            await get().fetchProfile();
+            set({ isLoading: false });
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback to FastAPI backend exchange
       const response = await authApi.googleCallback({ code });
       const token = response.access_token;
       setStoredAuthToken(token);
@@ -144,7 +288,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      if (isSupabaseConfigured()) {
+        await supabase.auth.signOut();
+      }
+    } catch {
+      // ignore
+    }
     setStoredAuthToken(null);
     set({
       token: null,

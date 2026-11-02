@@ -15,6 +15,22 @@ CRITICAL EXTRACTION RULES:
    - NEVER concatenate adjacent or nearby SKU labels into a single string. If two labels appear close to each other (e.g. adjacent cabinet codes, or an appliance code next to a cabinet code, or a cabinet next to a molding/panel), treat them as separate distinct line items.
    - Distinguish cabinet/product codes from descriptions, dimensions, callouts, and architectural notes.
    - sku: Exact product/cabinet code as printed (e.g. "B36 1TD BUTT", "SB33", "W2130R", "BT36B-2", "24W4827", "DEP1W"). Preserve exact characters without merging.
+   - TRIM AND MOULDING ITEMS ARE LINE ITEMS TOO: crown moulding, scribe, toekick, light rail, and
+     any other trim/moulding callout with its own code (e.g. "Crown: MCV96 - 1", "Scribe: SM96 - 3")
+     must be extracted with the exact same rigor as a full cabinet — same sku/quantity/position
+     fields, never skipped or merged into a neighboring cabinet's entry just because it is small or
+     visually subordinate on the elevation. A display with 15 cabinets and 3 trim callouts should
+     produce 18 line items, not 15.
+   - ONE PAGE OR DISPLAY CAN CONTAIN MULTIPLE NAMED SUB-SECTIONS: a single display/elevation page
+     is often split into several independently-named sub-sections (different finish/color/style
+     names, e.g. "Salt", "Dewdrop", "Drift"), each printed with its own repeating block of trim
+     callouts (its own "Crown: ... - N", "Scribe: ... - N", "Touch up: ... - N", etc.). These
+     sub-sections are NOT duplicates of each other even when their trim codes and structure look
+     nearly identical — each sub-section's items are physically separate products for a different
+     part of that display and must ALL be extracted as separate line items, tagged with their own
+     sub-section name in `position` (e.g. "Display 5 Salt", "Display 5 Drift"). NEVER collapse,
+     skip, or deduplicate a callout just because an identical-looking code already appeared under
+     a different sub-section name earlier on the same page.
 
 2. ACCURATE FIELD EXTRACTION:
    - description: Text title or description if provided near the item label.
@@ -30,7 +46,19 @@ CRITICAL EXTRACTION RULES:
    - source_text: The exact raw text supporting this item, copied verbatim from the document content —
      do not paraphrase or invent. Leave null if no text label is present (e.g. a purely graphical callout).
 
-3. UNCERTAINTY & PRESERVATION:
+3. DISPLAY/ELEVATION-LEVEL NOTES (construction, material, revision callouts):
+   - Every display or elevation section commonly has header-level text that is NOT tied to one
+     specific product row — e.g. "Construction: Furniture Board" or "Construction: Plywood",
+     a species/finish combo for the whole display (e.g. "Sagewood/PHW with Nutmeg/Maple hood
+     valance"), or a revision note (e.g. "Changed hood to flat arched valance, removed shiplap").
+   - Capture this text verbatim in the `notes` field. Attach it to every line item belonging to
+     that same display/elevation/position, not just one arbitrary item — a reader comparing this
+     display against a manufacturer acknowledgement later needs this context on any item they pull
+     up, not only the first one.
+   - Do not paraphrase, summarize, or drop qualifying words (species, finish names, upgrade/
+     downgrade language) from this text — copy it exactly as printed.
+
+4. UNCERTAINTY & PRESERVATION:
    - If an annotation is ambiguous or unclear whether it represents a product, mark confidence as low (< 0.5) and document uncertainty in notes.
-   - Never omit an explicit product label.
+   - Never omit an explicit product label, including small trim/moulding codes (see rule 1).
 """

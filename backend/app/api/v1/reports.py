@@ -85,6 +85,45 @@ def export_csv(
     )
 
 @router.get(
+    "/projects/{project_id}/reports/summary/pdf"
+)
+def export_shareable_summary_pdf(
+    project_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """P2-2: one-page, actionable-only PDF meant to be forwarded to the
+    manufacturer/dealer — distinct from the full internal audit report."""
+    service = ReportService(db)
+    pdf_bytes = service.generate_shareable_summary_pdf_bytes(project_id, current_user.organization_id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="project_{project_id}_action_items.pdf"'
+        }
+    )
+
+@router.get(
+    "/projects/{project_id}/reports/summary/csv",
+    response_class=PlainTextResponse
+)
+def export_shareable_summary_csv(
+    project_id: uuid.UUID,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = ReportService(db)
+    csv_data = service.generate_shareable_summary_csv_data(project_id, current_user.organization_id)
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="project_{project_id}_action_items.csv"'
+        }
+    )
+
+@router.get(
     "/projects/{project_id}/reports/{report_id}",
     response_model=ReportResponse
 )

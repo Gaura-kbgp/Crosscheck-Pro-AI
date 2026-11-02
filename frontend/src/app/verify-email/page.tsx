@@ -248,7 +248,7 @@ export default function VerifyEmailPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl leading-tight">
-            Document Intelligence for Construction Projects
+            Check Every Cabinet Order Against the Drawing and the Factory Acknowledgement
           </h1>
 
           <p className="text-base text-slate-300 leading-relaxed">

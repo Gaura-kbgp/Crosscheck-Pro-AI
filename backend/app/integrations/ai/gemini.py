@@ -3,7 +3,7 @@ try:
     from google import genai
 except ImportError:
     genai = None
-from typing import Dict, Any, Type
+from typing import Dict, Any, Optional, Type
 from pydantic import BaseModel
 from app.core.config import settings
 from app.integrations.ai.base import AIProvider
@@ -15,13 +15,15 @@ class GeminiProvider(AIProvider):
         if settings.GEMINI_API_KEY and genai:
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.model_name = "gemini-3.6-flash"
-        
+
     def extract_structured_data(
-        self, 
-        file_bytes: bytes, 
-        mime_type: str, 
-        prompt: str, 
-        schema: Type[BaseModel]
+        self,
+        file_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+        schema: Type[BaseModel],
+        doc_type: Optional[Any] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         if not self.client:
             # Fallback for testing when no API key

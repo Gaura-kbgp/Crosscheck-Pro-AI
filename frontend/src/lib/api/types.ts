@@ -67,17 +67,22 @@ export interface UserProfile {
   updated_at: string;
 }
 
+export type BusinessRole = "DESIGNER" | "DEALER" | "MANUFACTURER";
+
 export interface RegisterInput {
   email: string;
   password: string;
   confirm_password?: string;
   full_name?: string;
+  organization_name?: string;
+  business_role?: BusinessRole;
 }
 
 export interface RegisterResponse {
   message: string;
   email: string;
   is_verified: boolean;
+  user_id?: string;
 }
 
 export interface LoginInput {
@@ -136,6 +141,7 @@ export interface Project {
   discrepancy_count?: number;
   resolved_discrepancy_count?: number;
   progress_percentage?: number;
+  is_sample?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -496,6 +502,7 @@ export interface AuditLog {
 export interface Organization {
   id: string;
   name: string;
+  business_role?: BusinessRole | null;
   settings?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;

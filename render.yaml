@@ -66,6 +66,10 @@ services:
     envVars:
       - key: NEXT_PUBLIC_API_URL
         sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
 
   # 4. Redis Service
   - type: redis

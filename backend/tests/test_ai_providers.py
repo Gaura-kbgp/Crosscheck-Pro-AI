@@ -15,9 +15,21 @@ def test_ai_provider_factory_default(monkeypatch):
 def test_ai_provider_factory_openai(monkeypatch):
     monkeypatch.setattr(settings, "AI_PROVIDER", "openai")
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test-fake-key")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
     provider = get_ai_provider()
     assert isinstance(provider, OpenAIProvider)
     assert provider.model_name == "gpt-4o"
+
+
+def test_ai_provider_factory_openai_with_gemini_fallback(monkeypatch):
+    # When a Gemini key is also configured, OpenAI stays primary but the
+    # factory wraps it so extraction can fail over automatically.
+    monkeypatch.setattr(settings, "AI_PROVIDER", "openai")
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test-fake-key")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key")
+    provider = get_ai_provider()
+    assert isinstance(provider._primary, OpenAIProvider)
+    assert isinstance(provider._secondary, GeminiProvider)
 
 
 def test_openai_provider_no_client(monkeypatch):

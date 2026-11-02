@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { authApi } from "@/lib/api/endpoints";
+import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import {
@@ -43,7 +44,17 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setFormError(null);
     try {
-      await authApi.forgotPassword({ email: data.email });
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const isSupabaseConfigured = url && !url.includes("placeholder.supabase.co");
+      
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+          redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
+        });
+        if (error) throw error;
+      } else {
+        await authApi.forgotPassword({ email: data.email });
+      }
       setSubmittedEmail(data.email);
       setIsSuccess(true);
     } catch (err: unknown) {
@@ -76,7 +87,7 @@ export default function ForgotPasswordPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl leading-tight">
-            Document Intelligence for Construction Projects
+            Check Every Cabinet Order Against the Drawing and the Factory Acknowledgement
           </h1>
 
           <p className="text-base text-slate-300 leading-relaxed">

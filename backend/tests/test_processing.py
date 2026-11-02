@@ -84,7 +84,7 @@ def test_start_processing_missing_docs(client: TestClient, db_session):
     assert response.status_code == 400
     assert "missing required documents" in response.json()["detail"]
 
-def test_processing_task_pipeline_success(db_session, monkeypatch):
+def test_processing_task_pipeline_success(db_session, engine, monkeypatch):
     org = Organization(name="Org C")
     db_session.add(org)
     db_session.commit()
@@ -133,22 +133,43 @@ def test_processing_task_pipeline_success(db_session, monkeypatch):
             
     monkeypatch.setattr("app.worker.tasks.processing.get_ai_provider", lambda: MockGeminiProvider())
     monkeypatch.setattr("app.integrations.storage.StorageService.get_file", lambda self, path: b"%PDF-1.4 dummy bytes")
-    class MockSessionWrapper:
-        def __init__(self, sess):
-            self.sess = sess
-        def __getattr__(self, name):
-            if name == "close":
-                return lambda: None
-            return getattr(self.sess, name)
-            
-    monkeypatch.setattr("app.worker.tasks.processing.SessionLocal", lambda: MockSessionWrapper(db_session))
+    # Document extraction now runs concurrently, so each _get_db() call needs a
+    # genuinely independent Session (as production's real SessionLocal()
+    # factory provides) rather than one shared Session object, which isn't
+    # thread-safe. Sessions bind to the same test engine, but that engine is a
+    # single in-memory sqlite connection (StaticPool) shared by every session —
+    # unlike production's real Postgres connection pool, where concurrent
+    # sessions get genuinely independent connections, one raw sqlite3
+    # connection cannot safely drive simultaneous operations from multiple
+    # threads even via separate ORM Session wrappers. A lock around each
+    # session's lifetime (acquired on creation, released on close) serializes
+    # just the connection usage — this is a sqlite test-driver limitation, not
+    # something that exists against Postgres in production.
+    import threading
+    from sqlalchemy.orm import sessionmaker
+    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session_lock = threading.Lock()
+
+    def _locked_session_factory():
+        session_lock.acquire()
+        session = TestSessionLocal()
+        real_close = session.close
+        def _unlocking_close():
+            try:
+                real_close()
+            finally:
+                session_lock.release()
+        session.close = _unlocking_close
+        return session
+
+    monkeypatch.setattr("app.worker.tasks.processing.SessionLocal", _locked_session_factory)
     
     # Call the task synchronously
     process_project_pipeline(str(job.id), str(project.id), str(org.id), "corr-123")
     
     db_session.refresh(job)
     assert job.status == ProcessingJobStatus.COMPLETED
-    
+
     # Verify extraction created
     extractions = db_session.query(Extraction).all()
     assert len(extractions) == 3

@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     UPLOAD_RATE_LIMIT: int = 20
     UPLOAD_RATE_WINDOW_SECONDS: int = 300
     MAX_PDF_PAGES: int = 100
+    # Manufacturer spec books / NKBA reference catalogs routinely run 500+ pages
+    # (e.g. a real Marsh Spec Guide is 576 pages / 14.2MB) — a separate, higher
+    # cap from MAX_PDF_PAGES, which stays low for regular per-project documents
+    # (design/order/acknowledgement, which should legitimately be short).
+    MAX_CATALOG_PDF_PAGES: int = 700
 
     @property
     def cors_origins_list(self) -> List[str]:

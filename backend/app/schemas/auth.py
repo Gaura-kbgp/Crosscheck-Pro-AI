@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic.types import UUID4
 from typing import Optional
 from app.schemas.user import UserResponse
+from app.models.core import BusinessRole
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -9,6 +10,7 @@ class RegisterRequest(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     confirm_password: Optional[str] = None
     organization_name: Optional[str] = None
+    business_role: Optional[BusinessRole] = None
 
     @field_validator("confirm_password")
     @classmethod

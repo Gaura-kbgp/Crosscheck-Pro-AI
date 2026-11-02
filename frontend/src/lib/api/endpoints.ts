@@ -154,6 +154,14 @@ export const reportsApi = {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
     return `${baseUrl}/projects/${projectId}/reports/pdf`;
   },
+  downloadSummaryCsvUrl: (projectId: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+    return `${baseUrl}/projects/${projectId}/reports/summary/csv`;
+  },
+  downloadSummaryPdfUrl: (projectId: string) => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+    return `${baseUrl}/projects/${projectId}/reports/summary/pdf`;
+  },
 };
 
 export const usersApi = {

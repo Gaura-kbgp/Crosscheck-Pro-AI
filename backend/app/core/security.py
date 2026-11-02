@@ -4,6 +4,15 @@ import bcrypt
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 
+_jwks_client: "jwt.PyJWKClient | None" = None
+
+def _get_jwks_client() -> "jwt.PyJWKClient | None":
+    """Lazily builds a cached JWKS client for Supabase's asymmetric (ES256) signing keys."""
+    global _jwks_client
+    if _jwks_client is None and settings.SUPABASE_URL and "placeholder" not in settings.SUPABASE_URL:
+        _jwks_client = jwt.PyJWKClient(f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
+    return _jwks_client
+
 def hash_password(password: str) -> str:
     """Hashes a plaintext password securely using bcrypt."""
     salt = bcrypt.gensalt()
@@ -38,6 +47,24 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 def verify_jwt_token(token: str) -> dict | None:
     """Decodes and validates an application JWT token."""
+    # Supabase projects created with the modern signing-key system issue
+    # asymmetric (e.g. ES256) tokens that must be verified against their
+    # published JWKS, not a static shared secret.
+    try:
+        header = jwt.get_unverified_header(token)
+        if header.get("alg", "").upper() != "HS256":
+            jwks_client = _get_jwks_client()
+            if jwks_client:
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                return jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=[header["alg"]],
+                    options={"verify_aud": False}
+                )
+    except Exception:
+        pass
+
     # List candidate secrets to verify custom app tokens or legacy/test tokens
     candidate_secrets = [settings.JWT_SECRET]
     supabase_secret = getattr(settings, "SUPABASE_JWT_SECRET", None)
@@ -71,3 +98,4 @@ def verify_supabase_jwt(token: str) -> dict | None:
 def generate_secure_token() -> str:
     """Generates a cryptographically secure token for email verification and password reset."""
     return secrets.token_urlsafe(32)
+

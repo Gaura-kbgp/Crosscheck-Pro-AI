@@ -146,7 +146,7 @@ export function OrganizationTab({ profile }: OrganizationTabProps) {
               </div>
             </div>
             <p className="text-[11px] text-[#58708F] mt-2">
-              Cross-checked construction packages
+              Cross-checked cabinet order packages
             </p>
           </CardContent>
         </Card>

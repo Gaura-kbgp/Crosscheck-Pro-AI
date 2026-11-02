@@ -13,9 +13,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CrossCheckPro — Document Intelligence for Construction Projects",
+  title: "CrossCheckPro — Cabinet Order Verification",
   description:
-    "Automated three-way matching, discrepancy detection, and audit reconciliation for construction project documents.",
+    "Automated three-way matching between cabinet design drawings, purchase orders, and manufacturer acknowledgements — catch discrepancies before fabrication begins.",
   icons: {
     icon: [
       { url: "/logo.png" },

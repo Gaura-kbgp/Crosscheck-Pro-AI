@@ -27,7 +27,7 @@ def get_current_user(
 ) -> AuthenticatedUser:
     token = credentials.credentials
     payload = verify_jwt_token(token)
-    
+
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -45,10 +45,57 @@ def get_current_user(
     user = db.execute(stmt).scalar_one_or_none()
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found in database"
-        )
+        # Auto-provision Supabase user if valid email in payload
+        email = payload.get("email")
+        if email:
+            import uuid
+            from app.models.core import Organization, BusinessRole
+            user_meta = payload.get("user_metadata", {}) or {}
+            full_name = user_meta.get("full_name") or user_meta.get("name") or email.split("@")[0]
+            org_name = user_meta.get("organization_name") or f"{full_name}'s Org"
+            raw_business_role = user_meta.get("business_role")
+            business_role = None
+            if raw_business_role:
+                try:
+                    business_role = BusinessRole(raw_business_role)
+                except ValueError:
+                    business_role = None
+
+            org = Organization(id=uuid.uuid4(), name=org_name, business_role=business_role, settings={})
+            db.add(org)
+            db.flush()
+            
+            user = User(
+                id=uuid.uuid4(),
+                auth_id=str(auth_id),
+                organization_id=org.id,
+                email=email.lower().strip(),
+                full_name=full_name,
+                role=Role.ADMIN,
+                is_verified=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            # P2-1: pre-checked sample project so the first screen is never
+            # empty. Best-effort — a seeding failure must never block login.
+            try:
+                from app.services.sample_data_service import create_sample_project
+                create_sample_project(db, org.id)
+            except Exception:
+                pass
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found in database"
+            )
+    else:
+        # Keep auth_id synced if matched by email
+        if user.auth_id != auth_id:
+            user.auth_id = str(auth_id)
+            db.commit()
+            db.refresh(user)
         
     return AuthenticatedUser(
         user_id=user.id,

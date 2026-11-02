@@ -22,6 +22,7 @@ from app.core.security import (
     generate_secure_token,
 )
 from app.services.email_service import email_service
+from app.services.sample_data_service import create_sample_project
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -48,6 +49,7 @@ class AuthService:
         org = Organization(
             id=uuid.uuid4(),
             name=org_name,
+            business_role=req.business_role,
             settings={},
         )
         self.db.add(org)
@@ -73,6 +75,13 @@ class AuthService:
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
+
+        # P2-1: pre-checked sample project so the first screen is never empty.
+        # Best-effort — a seeding failure must never block account creation.
+        try:
+            create_sample_project(self.db, org.id)
+        except Exception as e:
+            logger.error("Failed to create sample project during registration", error=str(e), organization_id=str(org.id))
 
         # Send verification email asynchronously / via email service
         try:

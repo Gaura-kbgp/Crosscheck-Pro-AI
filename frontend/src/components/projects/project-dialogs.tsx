@@ -87,7 +87,7 @@ function CreateProjectForm({
           <DialogTitle>Create New Project</DialogTitle>
         </div>
         <DialogDescription>
-          Start a new construction document verification workspace.
+          Start a new cabinet order verification workspace.
         </DialogDescription>
       </DialogHeader>
 

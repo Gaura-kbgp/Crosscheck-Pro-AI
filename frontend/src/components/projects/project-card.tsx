@@ -121,12 +121,19 @@ export function ProjectCardsList({
                     <FolderKanban className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <Link
-                      href={`/projects/${project.id}`}
-                      className="text-base font-bold text-[#0F2747] hover:text-[#0284C7] transition-colors line-clamp-1 leading-snug block"
-                    >
-                      {project.name}
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="text-base font-bold text-[#0F2747] hover:text-[#0284C7] transition-colors line-clamp-1 leading-snug"
+                      >
+                        {project.name}
+                      </Link>
+                      {project.is_sample && (
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+                          Sample
+                        </span>
+                      )}
+                    </div>
                     {metaParts.length > 0 ? (
                       <p className="text-xs text-[#58708F] font-normal truncate mt-0.5">
                         {metaParts.join(" • ")}

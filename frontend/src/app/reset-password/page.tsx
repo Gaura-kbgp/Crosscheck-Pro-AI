@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { authApi } from "@/lib/api/endpoints";
+import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import {
@@ -21,6 +22,8 @@ import {
   CheckCircle,
   Loader2,
   ArrowRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const resetPasswordSchema = z
@@ -41,6 +44,7 @@ function ResetPasswordForm() {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -51,17 +55,22 @@ function ResetPasswordForm() {
   });
 
   const onSubmit = async (data: ResetPasswordFormData) => {
-    if (!token) {
-      setFormError("Reset token is missing or invalid. Please request a new link.");
-      return;
-    }
     setFormError(null);
     try {
-      await authApi.resetPassword({
-        token,
-        new_password: data.newPassword,
-        confirm_password: data.confirmPassword,
-      });
+      if (token) {
+        // Fallback / legacy token-based password reset
+        await authApi.resetPassword({
+          token,
+          new_password: data.newPassword,
+          confirm_password: data.confirmPassword,
+        });
+      } else {
+        // Supabase recovery session password update
+        const { error } = await supabase.auth.updateUser({
+          password: data.newPassword,
+        });
+        if (error) throw error;
+      }
       setIsSuccess(true);
     } catch (err: unknown) {
       setFormError(
@@ -169,14 +178,22 @@ function ResetPasswordForm() {
                 </div>
                 <input
                   id="newPassword"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
-                  placeholder="••••••••"
-                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
+                  placeholder="New Password"
+                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
                     errors.newPassword ? "border-rose-500" : "border-slate-200"
                   }`}
                   {...register("newPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {errors.newPassword && (
                 <p className="mt-1 text-xs text-rose-600">
@@ -198,14 +215,22 @@ function ResetPasswordForm() {
                 </div>
                 <input
                   id="confirmPassword"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
-                  placeholder="••••••••"
-                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
+                  placeholder="Confirm Password"
+                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-9 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-colors ${
                     errors.confirmPassword ? "border-rose-500" : "border-slate-200"
                   }`}
                   {...register("confirmPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {errors.confirmPassword && (
                 <p className="mt-1 text-xs text-rose-600">
@@ -261,7 +286,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl leading-tight">
-            Document Intelligence for Construction Projects
+            Check Every Cabinet Order Against the Drawing and the Factory Acknowledgement
           </h1>
 
           <p className="text-base text-slate-300 leading-relaxed">

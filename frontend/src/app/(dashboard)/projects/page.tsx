@@ -126,7 +126,7 @@ export default function ProjectsPage() {
       {/* Page Header */}
       <PageHeader
         title="Projects"
-        description="Manage your construction document verification projects."
+        description="Manage your cabinet order verification projects."
         actions={
           canCreate ? (
             <Button

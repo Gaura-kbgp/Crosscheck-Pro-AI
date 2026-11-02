@@ -20,6 +20,8 @@ import {
   Mail,
   KeyRound,
   ArrowRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const loginSchema = z.object({
@@ -34,6 +36,7 @@ export default function LoginPage() {
   const { session, isInitialized, login, loginWithGoogle, isLoading, error, clearError } =
     useAuthStore();
   const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -103,7 +106,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl leading-tight">
-            Document Intelligence for Construction Projects
+            Check Every Cabinet Order Against the Drawing and the Factory Acknowledgement
           </h1>
 
           <p className="text-base text-slate-300 leading-relaxed">
@@ -156,7 +159,7 @@ export default function LoginPage() {
               CrossCheck<span className="text-[#0EA5E9]">Pro</span>
             </span>
             <p className="text-xs text-[#58708F] font-medium">
-              Document Intelligence for Construction Projects
+              Cabinet Order Verification
             </p>
           </div>
 
@@ -268,14 +271,22 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  placeholder="••••••••"
-                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm text-[#0F2747] placeholder:text-[#58708F] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-colors ${
+                  placeholder="Password"
+                  className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-9 text-sm text-[#0F2747] placeholder:text-[#58708F] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-colors ${
                     errors.password ? "border-[#DC2626]" : "border-[#DCE6F0]"
                   }`}
                   {...register("password")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#58708F] hover:text-[#0F2747]"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {errors.password && (
                 <p className="mt-1 text-xs text-[#DC2626]">{errors.password.message}</p>

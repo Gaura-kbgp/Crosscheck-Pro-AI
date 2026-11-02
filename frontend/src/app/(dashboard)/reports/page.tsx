@@ -22,7 +22,8 @@ import {
   AlertCircle,
   FileCheck2,
   ArrowRight,
-  Loader2
+  Loader2,
+  Send
 } from "lucide-react";
 
 export default function ReportsAndExportsPage() {
@@ -31,6 +32,7 @@ export default function ReportsAndExportsPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
+  const [isDownloadingSummary, setIsDownloadingSummary] = useState(false);
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
 
   const activeProjectId = selectedProjectId || (projects && projects.length > 0 ? projects[0].id : null);
@@ -118,6 +120,32 @@ export default function ReportsAndExportsPage() {
     } finally {
       setIsDownloadingCsv(false);
       setDownloadingReportId(null);
+    }
+  };
+
+  const handleDownloadSummaryPdf = async () => {
+    if (!activeProjectId) return;
+    setIsDownloadingSummary(true);
+    try {
+      const url = reportsApi.downloadSummaryPdfUrl(activeProjectId);
+      const token = getStoredAuthToken();
+      const res = await fetch(url, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+      });
+      if (!res.ok) throw new Error("Failed to generate action items PDF");
+      const blob = await res.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `${activeProject?.name || "project"}_action_items.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(objectUrl);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Failed to download action items PDF", err);
+    } finally {
+      setIsDownloadingSummary(false);
     }
   };
 
@@ -292,6 +320,41 @@ export default function ReportsAndExportsPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Shareable Action Items Summary — forward to the manufacturer/dealer */}
+      <div className="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-5 hover:border-[#0EA5E9]/50 transition-colors">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shrink-0">
+            <Send className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-[#0F2747]">
+              Share Action Items with Manufacturer
+            </h3>
+            <p className="text-xs text-[#58708F] mt-1 leading-relaxed max-w-md">
+              A one-page summary of only the open items that need action — with acknowledgement line numbers — ready to forward externally. Not the full internal audit dossier.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={!isProjectReady || isDownloadingSummary}
+          onClick={handleDownloadSummaryPdf}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 disabled:opacity-50 cursor-pointer shrink-0"
+        >
+          {isDownloadingSummary ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Generating...</span>
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4" />
+              <span>Download Action Items (PDF)</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Generated Reports Table */}

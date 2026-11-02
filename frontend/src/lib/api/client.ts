@@ -121,7 +121,13 @@ async function request<T>(
     if (error instanceof ApiClientError) {
       throw error;
     }
-    throw new ApiClientError(500, (error as Error).message || "Network error occurred");
+    // fetch() throws a bare TypeError ("Failed to fetch") for network-level
+    // failures (server down, CORS rejection, offline) — never show that raw
+    // browser text to users.
+    throw new ApiClientError(
+      0,
+      "We couldn't reach CrossCheckPro. Try again in a minute. If it keeps happening, contact support@crosscheckpro.ai"
+    );
   }
 }
 

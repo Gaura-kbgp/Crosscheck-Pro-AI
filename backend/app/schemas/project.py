@@ -31,6 +31,7 @@ class ProjectResponse(BaseModel):
     discrepancy_count: int = 0
     resolved_discrepancy_count: int = 0
     progress_percentage: int = 0
+    is_sample: bool = False
     created_at: datetime
     updated_at: datetime
 

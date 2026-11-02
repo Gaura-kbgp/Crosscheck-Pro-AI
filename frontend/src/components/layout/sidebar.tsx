@@ -98,7 +98,7 @@ export function Sidebar({ className }: { className?: string }) {
             CrossCheck<span className="text-[#0EA5E9]">Pro</span>
           </span>
           <span className="text-[10px] font-semibold text-[#58708F] uppercase tracking-wider">
-            Document Intelligence
+            Cabinet Order Verification
           </span>
         </div>
       </div>

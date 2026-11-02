@@ -2,10 +2,12 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.types import UUID4
 from typing import Optional, Dict, Any
 from datetime import datetime
+from app.models.core import BusinessRole
 
 class OrganizationResponse(BaseModel):
     id: UUID4
     name: str
+    business_role: Optional[BusinessRole] = None
     settings: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime

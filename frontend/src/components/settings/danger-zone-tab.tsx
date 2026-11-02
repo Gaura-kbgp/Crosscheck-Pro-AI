@@ -70,7 +70,7 @@ export function DangerZoneTab({ profile }: DangerZoneTabProps) {
               </h5>
               <p className="text-xs text-[#58708F] max-w-lg leading-relaxed">
                 {isAdmin
-                  ? "Permanently deletes all construction projects, CAD drawings, PO extractions, and immutable audit logs for this organization."
+                  ? "Permanently deletes all cabinet order projects, design drawings, purchase order extractions, and immutable audit logs for this organization."
                   : "Workspace deletion requires Tenant Super-Administrator authorization. Contact your organization administrator."}
               </p>
             </div>
