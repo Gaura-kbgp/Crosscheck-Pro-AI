@@ -142,7 +142,11 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
-### 2026-11-03
+### 2026-11-03 (session 2)
+- **Inline project creation in upload modal** (`upload-document-modal.tsx`): Added "➕ Create New Project" option in the project selector. Selecting it shows a name input; on submit, project is created via `useCreateProject` hook first, then documents upload to it. Removed `disabled={projects.length===0}` from Upload button in `documents/page.tsx`. Users no longer need a separate "Create Project" step.
+- **Celery + Upstash Redis setup**: Added `ssl.CERT_NONE` SSL config in `celery_app.py` for `rediss://` URLs (required for Upstash on Windows local dev). Fixed stuck processing jobs via reset script.
+
+### 2026-11-03 (session 1)
 - **3-in-1 upload modal** (`upload-document-modal.tsx`): replaced single-type dropzone with 3 parallel dropzones (DESIGN + ORDER + ACKNOWLEDGEMENT). Uses `Promise.allSettled` for independent per-slot error handling. Same external props interface — no caller changes needed.
 - **Auto-start processing** (`document_service.py`): `_auto_start_processing_if_ready` triggers `ProcessingService.start_processing` automatically once all 3 doc types are uploaded to a project. Added test in `test_documents.py`.
 - **Role-aware onboarding banner** (`role-onboarding-banner.tsx`): shown on dashboard until org has a real project; role-specific copy for DESIGNER / DEALER / MANUFACTURER.
