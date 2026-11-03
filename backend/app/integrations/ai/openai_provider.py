@@ -250,6 +250,71 @@ class OpenAIProvider(AIProvider):
         except Exception as e:
             return f"[Word Document Text Extraction Failed: {e}]"
 
+    def _extract_text_pages(
+        self,
+        batch_pages: List[Dict[str, Any]],
+        total_pages: int,
+        prompt: str,
+        schema_json: Dict[str, Any],
+        system_prompt: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Extracts items for a page-group via text. A page GROUP can still
+        produce more items than fit in one response even after page-count
+        batching (e.g. a dense multi-column table packed onto a few pages) —
+        when the model's response is truncated (finish_reason == "length",
+        or the JSON simply fails to parse because it was cut off mid-value),
+        bisect the page range and retry each half instead of silently
+        dropping that batch's items (the original failure this project
+        reported: "Expecting value: line N column M" from a truncated
+        response).
+        """
+        import re
+        batch_text = "\n\n".join(f"--- PAGE {p['page_number']} ---\n{p['raw_text']}" for p in batch_pages)
+        if not re.sub(r"--- PAGE \d+ ---", "", batch_text).strip():
+            return []
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [{
+                    "type": "text",
+                    "text": (
+                        f"{prompt}\n\n"
+                        f"Analyzing document pages {batch_pages[0]['page_number']} to "
+                        f"{batch_pages[-1]['page_number']} of {total_pages}.\n\n"
+                        f"--- DOCUMENT CONTENT (PDF TEXT WITH SPATIAL LAYOUT) ---\n"
+                        f"{batch_text}\n\n"
+                        f"You MUST return the response strictly matching this JSON schema:\n"
+                        f"{json.dumps(schema_json)}"
+                    ),
+                }]},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
+        choice = response.choices[0]
+        content = choice.message.content or "{}"
+        try:
+            parsed = json.loads(content)
+            truncated = choice.finish_reason == "length"
+        except json.JSONDecodeError:
+            parsed = None
+            truncated = True
+
+        if truncated and len(batch_pages) > 1:
+            mid = len(batch_pages) // 2
+            return (
+                self._extract_text_pages(batch_pages[:mid], total_pages, prompt, schema_json, system_prompt)
+                + self._extract_text_pages(batch_pages[mid:], total_pages, prompt, schema_json, system_prompt)
+            )
+        if truncated:
+            # Single page still truncated/unparsable — nothing smaller to
+            # retry; surface honestly as no items rather than guessing.
+            return []
+        return parsed.get("items", []) if isinstance(parsed, dict) else []
+
     def _vision_batch_extract(
         self,
         file_bytes: bytes,
@@ -382,38 +447,9 @@ class OpenAIProvider(AIProvider):
                 merged_items: List[Dict[str, Any]] = []
                 for batch_start in range(0, len(page_evidence), TEXT_BATCH_SIZE):
                     batch_pages = page_evidence[batch_start:batch_start + TEXT_BATCH_SIZE]
-                    batch_text = "\n\n".join(
-                        f"--- PAGE {p['page_number']} ---\n{p['raw_text']}" for p in batch_pages
+                    merged_items.extend(
+                        self._extract_text_pages(batch_pages, len(page_evidence), prompt, schema_json, system_prompt)
                     )
-                    if not re.sub(r"--- PAGE \d+ ---", "", batch_text).strip():
-                        continue
-                    response = self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": [{
-                                "type": "text",
-                                "text": (
-                                    f"{prompt}\n\n"
-                                    f"Analyzing document pages {batch_pages[0]['page_number']} to "
-                                    f"{batch_pages[-1]['page_number']} of {len(page_evidence)}.\n\n"
-                                    f"--- DOCUMENT CONTENT (PDF TEXT WITH SPATIAL LAYOUT) ---\n"
-                                    f"{batch_text}\n\n"
-                                    f"You MUST return the response strictly matching this JSON schema:\n"
-                                    f"{json.dumps(schema_json)}"
-                                ),
-                            }]},
-                        ],
-                        response_format={"type": "json_object"},
-                        temperature=0.1,
-                    )
-                    content = response.choices[0].message.content or "{}"
-                    try:
-                        parsed_batch = json.loads(content)
-                    except json.JSONDecodeError:
-                        continue  # this batch's malformed/truncated response never blocks the rest
-                    if isinstance(parsed_batch, dict):
-                        merged_items.extend(parsed_batch.get("items", []))
 
                 # DESIGN documents (floor plans / elevations) often carry the
                 # real cabinet instance callouts as graphics or rotated labels
