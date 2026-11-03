@@ -143,6 +143,7 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 ## Changelog (newest first)
 
 ### 2026-11-03 (session 2)
+- **Build 2: Post-upload redirect + Review CTA** (`documents/page.tsx`, `processing-status-card.tsx`): After upload success, user is redirected to `/projects/[id]` immediately (live processing status card visible). When processing completes, status card shows "Review Discrepancies →" (green, goes to `/review`) + "View Matrix" (secondary, crosscheck).
 - **Inline project creation in upload modal** (`upload-document-modal.tsx`): Added "➕ Create New Project" option in the project selector. Selecting it shows a name input; on submit, project is created via `useCreateProject` hook first, then documents upload to it. Removed `disabled={projects.length===0}` from Upload button in `documents/page.tsx`. Users no longer need a separate "Create Project" step.
 - **Celery + Upstash Redis setup**: Added `ssl.CERT_NONE` SSL config in `celery_app.py` for `rediss://` URLs (required for Upstash on Windows local dev). Fixed stuck processing jobs via reset script.
 
