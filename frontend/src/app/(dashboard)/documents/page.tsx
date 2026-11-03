@@ -212,8 +212,7 @@ function DocumentsContent() {
         defaultProjectId={selectedProjectId}
         onOpenChange={setIsUploadModalOpen}
         onSuccess={(projId) => {
-          handleProjectChange(projId);
-          refetchDocs();
+          router.push(`/projects/${projId}`);
         }}
       />
 

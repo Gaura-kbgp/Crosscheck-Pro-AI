@@ -137,12 +137,20 @@ export function ProcessingStatusCard({
         {/* Action button */}
         <div className="shrink-0 flex items-center gap-2">
           {isCompleted && (
-            <Link href={`/projects/${projectId}/crosscheck`}>
-              <Button variant="default" size="sm" className="gap-1.5 font-semibold bg-[#0EA5E9] hover:bg-[#0284C7]">
-                <GitCompare className="h-4 w-4" />
-                <span>Open Cross-Check Matrix</span>
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/projects/${projectId}/review`}>
+                <Button variant="default" size="sm" className="gap-1.5 font-semibold bg-[#16A34A] hover:bg-[#15803D]">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Review Discrepancies</span>
+                </Button>
+              </Link>
+              <Link href={`/projects/${projectId}/crosscheck`}>
+                <Button variant="outline" size="sm" className="gap-1.5 font-semibold text-[#58708F]">
+                  <GitCompare className="h-4 w-4" />
+                  <span>View Matrix</span>
+                </Button>
+              </Link>
+            </div>
           )}
 
           {isFailed && onRetry && (
