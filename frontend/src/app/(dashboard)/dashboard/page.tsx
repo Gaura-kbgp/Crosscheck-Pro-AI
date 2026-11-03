@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useDashboard } from "@/lib/hooks/use-dashboard";
 import { useOrganization } from "@/lib/hooks/use-organization";
 import { PageHeader } from "@/components/layout/page-header";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { ProcessingActivityChart } from "@/components/dashboard/processing-activity-chart";
 import { RecentProjectsCard } from "@/components/dashboard/recent-projects-card";
 import { RoleOnboardingBanner } from "@/components/dashboard/role-onboarding-banner";
 import { ErrorState } from "@/components/feedback/error-state";
@@ -38,15 +37,12 @@ function getUserFirstName(email?: string, name?: string): string {
 
 export default function DashboardPage() {
   const { user, profile } = useAuthStore();
-  const [timeframe, setTimeframe] = useState<7 | 30>(7);
   const {
     metrics,
-    activityData,
-    hasActivity,
     isLoading,
     error,
     refetch,
-  } = useDashboard(timeframe);
+  } = useDashboard();
   const { data: organization } = useOrganization();
 
   const greeting = getGreeting();
@@ -104,27 +100,12 @@ export default function DashboardPage() {
         <KpiCards metrics={metrics} isLoading={isLoading} />
       </section>
 
-      {/* Main Grid: Recent Projects (3 cols) + Activity Chart (2 cols) */}
-      <section
-        aria-label="Recent activity and projects"
-        className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start"
-      >
-        <div className="lg:col-span-3">
-          <RecentProjectsCard
-            projects={metrics.recentProjects}
-            isLoading={isLoading}
-          />
-        </div>
-
-        <div className="lg:col-span-2">
-          <ProcessingActivityChart
-            data={activityData}
-            hasActivity={hasActivity}
-            timeframe={timeframe}
-            onTimeframeChange={setTimeframe}
-            isLoading={isLoading}
-          />
-        </div>
+      {/* Recent Projects */}
+      <section aria-label="Recent projects">
+        <RecentProjectsCard
+          projects={metrics.recentProjects}
+          isLoading={isLoading}
+        />
       </section>
     </div>
   );
