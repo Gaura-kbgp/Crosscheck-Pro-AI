@@ -250,6 +250,67 @@ class OpenAIProvider(AIProvider):
         except Exception as e:
             return f"[Word Document Text Extraction Failed: {e}]"
 
+    def _vision_batch_extract(
+        self,
+        file_bytes: bytes,
+        prompt: str,
+        schema_json: Dict[str, Any],
+        system_prompt: str,
+        batch_size: int = 6,
+    ) -> List[Dict[str, Any]]:
+        """
+        Renders every PDF page to an image and extracts items via Vision,
+        batched the same way as the scanned-PDF pass below, so drawing-only
+        content (labels that exist as graphics, not text) can still be read.
+        """
+        if not fitz:
+            return []
+        doc_fitz = fitz.open(stream=file_bytes, filetype="pdf")
+        total_pages = len(doc_fitz)
+        items: List[Dict[str, Any]] = []
+        for batch_start in range(0, total_pages, batch_size):
+            batch_end = min(batch_start + batch_size, total_pages)
+            batch_content = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"{prompt}\n\n"
+                        f"Analyzing document pages {batch_start + 1} to {batch_end} of {total_pages} "
+                        f"as images. Read any labels, callouts or codes that appear only as drawing "
+                        f"graphics, not as selectable text.\n"
+                        f"You MUST return the response strictly matching this JSON schema:\n"
+                        f"{json.dumps(schema_json)}"
+                    ),
+                }
+            ]
+            for pno in range(batch_start, batch_end):
+                page = doc_fitz[pno]
+                pix = page.get_pixmap(dpi=150)
+                img_bytes = pix.tobytes("jpeg")
+                b64 = base64.b64encode(img_bytes).decode("utf-8")
+                batch_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
+                })
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": batch_content},
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                )
+                content = response.choices[0].message.content or "{}"
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    items.extend(parsed.get("items", []))
+            except Exception:
+                continue  # this batch's failure never blocks the rest
+        doc_fitz.close()
+        return items
+
     def extract_structured_data(
         self,
         file_bytes: bytes,
@@ -354,6 +415,19 @@ class OpenAIProvider(AIProvider):
                     if isinstance(parsed_batch, dict):
                         merged_items.extend(parsed_batch.get("items", []))
 
+                # DESIGN documents (floor plans / elevations) often carry the
+                # real cabinet instance callouts as graphics or rotated labels
+                # drawn directly on the page, not as selectable text — a page
+                # of boilerplate (dealer name, finish legend) can clear the
+                # text-presence threshold above while every real callout is
+                # invisible to the text pass. Always supplement text
+                # extraction with Vision for DESIGN so drawing-only labels
+                # aren't silently dropped (brief §4: native text presence
+                # does not mean drawing labels were extracted completely).
+                if doc_type == "DESIGN" and self.client:
+                    vision_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt)
+                    merged_items.extend(vision_items)
+
                 return {"items": merged_items, "_page_evidence": page_evidence}
             else:
                 # Scanned / Image PDF (no embedded text) -> two independent passes + reconciliation
@@ -414,56 +488,11 @@ class OpenAIProvider(AIProvider):
                         except Exception:
                             continue  # this batch's OCR structuring failure never blocks the rest
 
-                # ---- Pass B: Vision (existing behavior, unchanged) -------------
+                # ---- Pass B: Vision (shared with the DESIGN text-path supplement) ----
                 doc_fitz = fitz.open(stream=file_bytes, filetype="pdf")
                 total_pages = len(doc_fitz)
-                merged_items: List[Dict[str, Any]] = []
-
-                # Process in batches of up to 6 pages per call to ensure high extraction fidelity
-                BATCH_SIZE = 6
-                for batch_start in range(0, total_pages, BATCH_SIZE):
-                    batch_end = min(batch_start + BATCH_SIZE, total_pages)
-                    batch_content = [
-                        {
-                            "type": "text",
-                            "text": (
-                                f"{prompt}\n\n"
-                                f"Analyzing scanned document pages {batch_start + 1} to {batch_end} of {total_pages}.\n"
-                                f"You MUST return the response strictly matching this JSON schema:\n"
-                                f"{json.dumps(schema_json)}"
-                            )
-                        }
-                    ]
-                    for pno in range(batch_start, batch_end):
-                        page = doc_fitz[pno]
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("jpeg")
-                        b64 = base64.b64encode(img_bytes).decode("utf-8")
-                        batch_content.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{b64}",
-                                "detail": "high"
-                            }
-                        })
-
-                    response = self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": batch_content},
-                        ],
-                        response_format={"type": "json_object"},
-                        temperature=0.1,
-                    )
-                    content = response.choices[0].message.content or "{}"
-                    try:
-                        parsed_batch = json.loads(content)
-                        if isinstance(parsed_batch, dict):
-                            items = parsed_batch.get("items", [])
-                            merged_items.extend(items)
-                    except Exception:
-                        pass
+                doc_fitz.close()
+                merged_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt)
 
                 # F8.3 Phase 2 §14: scanned pages have no deterministic text
                 # layer to verify claims against, so evidence is honestly
@@ -480,7 +509,6 @@ class OpenAIProvider(AIProvider):
                     }
                     for pno in range(total_pages)
                 ]
-                doc_fitz.close()
 
                 # ---- Reconciliation: OCR (Pass A) vs Vision (Pass B) -----------
                 # Never silently pick one source; agreement -> VERIFIED,
