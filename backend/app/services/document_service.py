@@ -130,6 +130,7 @@ class DocumentService:
                 status=DocumentStatus.UPLOADED,
                 document_hash=document_hash
             )
+            self._auto_start_processing_if_ready(project_id, organization_id)
             return doc
         except Exception as e:
             try:
@@ -137,6 +138,25 @@ class DocumentService:
             except Exception:
                 pass
             raise BusinessLogicError(f"Database error: {str(e)}")
+
+    def _auto_start_processing_if_ready(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> None:
+        """Friction reduction: once a project has all 3 required document
+        types, start the cross-check automatically instead of making the
+        user find and click a separate "Start Processing" control. Must
+        never fail the upload it's called from — swallow everything;
+        ProcessingService.start_processing already guards against missing
+        doc types (raises, harmless no-op here) and duplicate active jobs
+        (409, also harmless no-op here)."""
+        try:
+            docs = self.repository.list_by_project(project_id, organization_id)
+            doc_types = {d.document_type for d in docs}
+            required = {DocumentType.DESIGN, DocumentType.ORDER, DocumentType.ACKNOWLEDGEMENT}
+            if not required.issubset(doc_types):
+                return
+            from app.services.processing_service import ProcessingService
+            ProcessingService(self.db).start_processing(project_id, organization_id)
+        except Exception:
+            pass
 
     def list_documents(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> List[Document]:
         self.project_service.get_project(project_id, organization_id)

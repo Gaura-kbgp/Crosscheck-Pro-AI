@@ -99,3 +99,43 @@ def test_document_tenant_isolation(client, db_session):
 
     response = client.post(f"/api/v1/projects/{project_b.id}/documents", headers=headers, files=files, data=data)
     assert response.status_code == 404 # Project not found in Org A
+
+
+def test_upload_last_required_document_auto_starts_processing(client, db_session, mock_storage, monkeypatch):
+    """Friction reduction: no manual 'Start Processing' click needed once
+    Design + Order + Acknowledgement are all uploaded."""
+    monkeypatch.setattr("celery.app.task.Task.delay", lambda *args, **kwargs: None)
+
+    org = Organization(name="Org Auto")
+    db_session.add(org)
+    db_session.commit()
+
+    user = User(auth_id="auth-auto", organization_id=org.id, email="auto@a.com", role=Role.ADMIN)
+    db_session.add(user)
+    project = Project(organization_id=org.id, name="Project Auto")
+    db_session.add(project)
+    db_session.commit()
+
+    token = create_test_token("auth-auto")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def upload(doc_type: str):
+        files = {"file": (f"{doc_type}.pdf", BytesIO(b"PDF mock content"), "application/pdf")}
+        return client.post(
+            f"/api/v1/projects/{project.id}/documents",
+            headers=headers, files=files, data={"document_type": doc_type},
+        )
+
+    from app.models.core import ProcessingJob
+
+    assert upload("DESIGN").status_code == 201
+    assert upload("ORDER").status_code == 201
+    # Only 2/3 types present — must not have auto-started yet.
+    assert db_session.query(ProcessingJob).filter_by(project_id=project.id).count() == 0
+
+    assert upload("ACKNOWLEDGEMENT").status_code == 201
+    # Last required type uploaded — a job should now exist, with no manual
+    # call to POST /projects/{id}/process.
+    jobs = db_session.query(ProcessingJob).filter_by(project_id=project.id).all()
+    assert len(jobs) == 1
+    assert jobs[0].status.value == "QUEUED"
