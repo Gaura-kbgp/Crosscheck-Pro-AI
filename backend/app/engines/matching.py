@@ -107,52 +107,58 @@ def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMa
     return units
 
 
+# Finish/door_style text is worded very differently between documents — a
+# Design page header ("Sagewood/PHW with Nutmeg/Maple hood valance") vs an
+# Order row ("MONROE PHW SAGEWOOD") describe the same display with almost no
+# shared substring. Exact-string comparison misses this; comparing by
+# significant word overlap instead survives the reword. These short
+# connector/qualifier words are common across many unrelated displays (seen
+# in real extracted data) so they must never be the ONLY basis for a match.
+_CONFIG_STOPWORDS = {
+    "phw", "pok", "ply", "fx", "with", "and", "the", "of", "a", "b",
+    "door", "style", "finish", "hood", "valance", "construction",
+}
+
+
+def _significant_tokens(text: Optional[str]) -> Set[str]:
+    """Lowercased word tokens of length >= 4, minus generic connector/qualifier words."""
+    normalized = normalize_text(text or "") or ""
+    return {t for t in normalized.split() if len(t) >= 4 and t not in _CONFIG_STOPWORDS}
+
+
 def _collect_order_configs(
     order_units: List[CanonicalMatchingUnit], ack_units: List[CanonicalMatchingUnit]
-) -> Tuple[Set[str], Set[str]]:
+) -> Set[str]:
     """
-    Every distinct door_style and finish explicitly present anywhere in
-    Order/Ack. A Design document can be a multi-display/multi-room catalog
-    (e.g. a dealer's full showroom brief) spanning far more than this order,
-    but Order/Ack items always belong to it. Used to recognize design items
-    that don't correspond to ANY item in this order at all — not by guessing
-    a single "correct" display, which is unsafe when the order itself spans
-    several displays (a dealer ordering for multiple rooms at once), but by
-    checking whether the design item's finish/door_style shows up anywhere
-    in the order.
+    Every significant door_style/finish word present anywhere in Order/Ack.
+    A Design document can be a multi-display/multi-room catalog (e.g. a
+    dealer's full showroom brief) spanning far more than this order, but
+    Order/Ack items always belong to it. Used to recognize design items that
+    don't correspond to ANY item in this order at all — not by guessing a
+    single "correct" display, which is unsafe when the order itself spans
+    several displays (a dealer ordering for multiple rooms at once).
     """
-    door_styles: Set[str] = set()
-    finishes: Set[str] = set()
+    tokens: Set[str] = set()
     for unit in list(order_units) + list(ack_units):
-        door = normalize_text(unit.door_style or "") or ""
-        fin = normalize_text(unit.finish or "") or ""
-        if door:
-            door_styles.add(door)
-        if fin:
-            finishes.add(fin)
-    return door_styles, finishes
+        tokens |= _significant_tokens(unit.door_style)
+        tokens |= _significant_tokens(unit.finish)
+    return tokens
 
 
-def _is_out_of_scope(
-    unit: CanonicalMatchingUnit, order_door_styles: Set[str], order_finishes: Set[str]
-) -> bool:
+def _is_out_of_scope(unit: CanonicalMatchingUnit, order_config_tokens: Set[str]) -> bool:
     """
-    True only when the unit has an explicit door_style or finish and NEITHER
-    appears anywhere in Order/Ack — i.e. it belongs to no display the order
-    touches at all. Blank/unspecified fields are never treated as evidence
-    of exclusion ("blank fields mean unspecified, not false"), and a single
-    field matching anywhere in the order is enough to keep it in scope.
+    True only when the unit has an explicit door_style or finish and shares
+    NOT ONE significant word with anything anywhere in Order/Ack — i.e. it
+    belongs to no display the order touches at all. Blank/unspecified
+    fields are never treated as evidence of exclusion ("blank fields mean
+    unspecified, not false").
     """
-    door = normalize_text(unit.door_style or "") or ""
-    fin = normalize_text(unit.finish or "") or ""
-    explicit_checks = []
-    if door and order_door_styles:
-        explicit_checks.append(door in order_door_styles)
-    if fin and order_finishes:
-        explicit_checks.append(fin in order_finishes)
-    if not explicit_checks:
+    if not order_config_tokens:
         return False
-    return not any(explicit_checks)
+    unit_tokens = _significant_tokens(unit.door_style) | _significant_tokens(unit.finish)
+    if not unit_tokens:
+        return False
+    return unit_tokens.isdisjoint(order_config_tokens)
 
 
 def _best_config_match(
@@ -160,21 +166,26 @@ def _best_config_match(
 ) -> Optional[CanonicalMatchingUnit]:
     """
     Disambiguates same-SKU duplicate candidates (e.g. a generic trim code
-    reused across several displays/rooms) by finish/door_style when
-    dimensions aren't available. Returns a candidate only when exactly one
-    of them shares the reference's finish or door_style — otherwise None,
-    so the caller abstains to UNCERTAIN rather than guessing.
+    reused across several displays/rooms) by finish/door_style word overlap
+    when dimensions aren't available. Returns a candidate only when exactly
+    one of them has the strictly highest overlap (>= 1 shared word) with the
+    reference — any tie, or zero overlap across the board, abstains to None
+    so the caller falls through to UNCERTAIN rather than guessing.
     """
-    ref_fin = normalize_text(reference.finish or "") or ""
-    ref_door = normalize_text(reference.door_style or "") or ""
-    if not ref_fin and not ref_door:
+    ref_tokens = _significant_tokens(reference.finish) | _significant_tokens(reference.door_style)
+    if not ref_tokens:
         return None
-    matches = [
-        c for c in candidates
-        if (ref_fin and normalize_text(c.finish or "") == ref_fin)
-        or (ref_door and normalize_text(c.door_style or "") == ref_door)
+    scored = [
+        (len(ref_tokens & (_significant_tokens(c.finish) | _significant_tokens(c.door_style))), c)
+        for c in candidates
     ]
-    return matches[0] if len(matches) == 1 else None
+    scored = [(score, c) for score, c in scored if score > 0]
+    if not scored:
+        return None
+    scored.sort(key=lambda sc: sc[0], reverse=True)
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return None
+    return scored[0][1]
 
 
 class MatchingEngine:
@@ -209,9 +220,9 @@ class MatchingEngine:
         # instead of letting unrelated-display items collide with this
         # order's SKUs and surface as noisy EXTRA/UNCERTAIN findings (see
         # brief: "do not assume every page is the same room").
-        order_door_styles, order_finishes = _collect_order_configs(order_units, ack_units)
+        order_config_tokens = _collect_order_configs(order_units, ack_units)
         out_of_scope_design_units = [
-            u for u in design_units_all if _is_out_of_scope(u, order_door_styles, order_finishes)
+            u for u in design_units_all if _is_out_of_scope(u, order_config_tokens)
         ]
         design_units = [u for u in design_units_all if u not in out_of_scope_design_units]
 
