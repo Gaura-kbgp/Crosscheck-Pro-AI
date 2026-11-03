@@ -3,12 +3,14 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, CheckCircle2, CheckCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CheckCheck, Download } from "lucide-react";
 import { useProject } from "@/lib/hooks/use-projects";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { useCrossCheckConfig } from "@/lib/hooks/use-crosscheck-preferences";
 import { useFinalizeProject, useBulkAcceptNonCritical } from "@/lib/hooks/use-reviews";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { reportsApi } from "@/lib/api/endpoints";
+import { getStoredAuthToken } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/feedback/error-state";
 import { Button } from "@/components/ui/button";
@@ -45,6 +47,34 @@ export default function ReviewPage() {
 
   const [selectedDiscrepancyId, setSelectedDiscrepancyId] = useState<string | null>(null);
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const [isAcceptingAndDownloading, setIsAcceptingAndDownloading] = useState(false);
+
+  const handleAcceptAllAndDownload = async () => {
+    setIsAcceptingAndDownloading(true);
+    try {
+      await bulkAcceptMutation.mutateAsync(undefined);
+      const pdfUrl = reportsApi.downloadPdfUrl(projectId);
+      const token = getStoredAuthToken();
+      const res = await fetch(pdfUrl, {
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+      });
+      if (!res.ok) throw new Error("Failed to generate report");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${project?.name || "project"}_audit_report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Report downloaded!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to download report");
+    } finally {
+      setIsAcceptingAndDownloading(false);
+    }
+  };
 
   const handleBulkAccept = async () => {
     const confirmed = window.confirm(
@@ -182,6 +212,14 @@ export default function ReviewPage() {
 
         {canManage && !isFinalized && (
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              className="bg-[#0284C7] hover:bg-[#0369A1] text-white font-semibold shadow-xs"
+              onClick={handleAcceptAllAndDownload}
+              isLoading={isAcceptingAndDownloading}
+              leftIcon={<Download className="h-4 w-4" />}
+            >
+              Accept All & Download Report
+            </Button>
             <Button
               variant="outline"
               className="border-[#DCE6F0] text-[#0F2747] font-semibold"
