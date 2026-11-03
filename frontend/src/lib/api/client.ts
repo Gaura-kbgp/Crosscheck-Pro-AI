@@ -93,12 +93,18 @@ async function request<T>(
       let code: string | undefined;
 
       try {
-        const errorData: ApiError = await response.json();
-        if (errorData.detail) {
+        const errorData = await response.json();
+        // Backend returns either {"detail": "..."} (FastAPI default)
+        // or {"error": {"message": "...", "code": "..."}} (BaseAPIException handler)
+        if (errorData?.detail) {
           detail = errorData.detail;
+        } else if (errorData?.error?.message) {
+          detail = errorData.error.message;
         }
-        if (errorData.code) {
+        if (errorData?.code) {
           code = errorData.code;
+        } else if (errorData?.error?.code) {
+          code = errorData.error.code;
         }
       } catch {
         detail = response.statusText || detail;
