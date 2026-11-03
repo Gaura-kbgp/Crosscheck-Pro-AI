@@ -311,33 +311,50 @@ class OpenAIProvider(AIProvider):
             actual_text = re.sub(r"--- PAGE \d+ ---", "", pdf_text).strip()
 
             if len(actual_text) >= 30:
-                # Text-based / structured vector PDF
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": (
-                            f"{prompt}\n\n"
-                            f"--- DOCUMENT CONTENT (PDF TEXT WITH SPATIAL LAYOUT) ---\n"
-                            f"{pdf_text}\n\n"
-                            f"You MUST return the response strictly matching this JSON schema:\n"
-                            f"{json.dumps(schema_json)}"
-                        ),
-                    }
-                ]
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_content},
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.1,
-                )
-                content = response.choices[0].message.content or "{}"
-                result = json.loads(content)
-                if isinstance(result, dict):
-                    result["_page_evidence"] = page_evidence
-                return result
+                # Text-based / structured vector PDF. Batched by page group
+                # (mirrors the Vision/OCR batching below) so a document with
+                # many line items never needs one response large enough to
+                # hit the model's output-token limit and get cut off mid-JSON
+                # (observed failure: "Expecting value: line N column M" from
+                # a truncated response on large multipage documents).
+                TEXT_BATCH_SIZE = 6
+                merged_items: List[Dict[str, Any]] = []
+                for batch_start in range(0, len(page_evidence), TEXT_BATCH_SIZE):
+                    batch_pages = page_evidence[batch_start:batch_start + TEXT_BATCH_SIZE]
+                    batch_text = "\n\n".join(
+                        f"--- PAGE {p['page_number']} ---\n{p['raw_text']}" for p in batch_pages
+                    )
+                    if not re.sub(r"--- PAGE \d+ ---", "", batch_text).strip():
+                        continue
+                    response = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": [{
+                                "type": "text",
+                                "text": (
+                                    f"{prompt}\n\n"
+                                    f"Analyzing document pages {batch_pages[0]['page_number']} to "
+                                    f"{batch_pages[-1]['page_number']} of {len(page_evidence)}.\n\n"
+                                    f"--- DOCUMENT CONTENT (PDF TEXT WITH SPATIAL LAYOUT) ---\n"
+                                    f"{batch_text}\n\n"
+                                    f"You MUST return the response strictly matching this JSON schema:\n"
+                                    f"{json.dumps(schema_json)}"
+                                ),
+                            }]},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.1,
+                    )
+                    content = response.choices[0].message.content or "{}"
+                    try:
+                        parsed_batch = json.loads(content)
+                    except json.JSONDecodeError:
+                        continue  # this batch's malformed/truncated response never blocks the rest
+                    if isinstance(parsed_batch, dict):
+                        merged_items.extend(parsed_batch.get("items", []))
+
+                return {"items": merged_items, "_page_evidence": page_evidence}
             else:
                 # Scanned / Image PDF (no embedded text) -> two independent passes + reconciliation
                 if not fitz:
