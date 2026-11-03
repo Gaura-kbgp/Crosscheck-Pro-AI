@@ -138,11 +138,11 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleStartCrossCheck = async () => {
+  const handleStartCrossCheck = async (forceReprocess: boolean = false) => {
     setActionError(null);
     setIsStatusCardDismissed(false);
     try {
-      const job: ProcessingJobResponse = await processMutation.mutateAsync();
+      const job: ProcessingJobResponse = await processMutation.mutateAsync(forceReprocess);
       if (job?.id) {
         setActiveJobId(job.id);
       }
@@ -152,6 +152,15 @@ export default function ProjectDetailPage() {
           ? err.message
           : "Cross-check could not be started."
       );
+    }
+  };
+
+  const handleRescan = () => {
+    const confirmed = window.confirm(
+      "Rescan will re-run AI extraction and cross-check on this project's documents. Existing discrepancy results will be replaced. Continue?"
+    );
+    if (confirmed) {
+      handleStartCrossCheck(true);
     }
   };
 
@@ -206,7 +215,8 @@ export default function ProjectDetailPage() {
         canProcess={canManage}
         isAllUploaded={isAllUploaded}
         isProcessing={isProcessing}
-        onStartCrossCheck={handleStartCrossCheck}
+        onStartCrossCheck={() => handleStartCrossCheck()}
+        onRescan={handleRescan}
         canEdit={canManage}
       />
 
@@ -237,7 +247,7 @@ export default function ProjectDetailPage() {
             status={jobStatusData?.status || "QUEUED"}
             error={jobStatusData?.error}
             projectId={projectId}
-            onRetry={handleStartCrossCheck}
+            onRetry={() => handleStartCrossCheck()}
             onDismiss={() => setIsStatusCardDismissed(true)}
             onCancel={handleCancelProcessing}
             isCancelling={cancelMutation.isPending}

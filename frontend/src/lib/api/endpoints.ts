@@ -102,8 +102,10 @@ export const documentsApi = {
 };
 
 export const processingApi = {
-  start: (projectId: string) =>
-    apiClient.post<ProcessingJobResponse>(`/projects/${projectId}/process`),
+  start: (projectId: string, forceReprocess: boolean = false) =>
+    apiClient.post<ProcessingJobResponse>(`/projects/${projectId}/process`, undefined, {
+      params: { force_reprocess: forceReprocess },
+    }),
   jobStatus: (jobId: string) =>
     apiClient.get<ProcessingJobResponse>(`/jobs/${jobId}/status`),
   cancel: (jobId: string) =>

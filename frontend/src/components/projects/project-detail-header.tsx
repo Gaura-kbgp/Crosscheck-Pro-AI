@@ -6,7 +6,7 @@ import { Project } from "@/lib/api/types";
 import { ProjectStatusBadge } from "@/components/badges/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Building, User, Play, GitCompare, FileText } from "lucide-react";
+import { ArrowLeft, Building, User, Play, GitCompare, FileText, RotateCcw } from "lucide-react";
 
 interface ProjectDetailHeaderProps {
   project: Project;
@@ -14,6 +14,7 @@ interface ProjectDetailHeaderProps {
   isAllUploaded: boolean;
   isProcessing: boolean;
   onStartCrossCheck?: () => void;
+  onRescan?: () => void;
   canEdit?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function ProjectDetailHeader({
   isAllUploaded,
   isProcessing,
   onStartCrossCheck,
+  onRescan,
 }: ProjectDetailHeaderProps) {
   return (
     <div className="space-y-4">
@@ -66,6 +68,19 @@ export function ProjectDetailHeader({
 
         {/* Primary CTA Area */}
         <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED") && canProcess && (
+            <Button
+              variant="outline"
+              size="default"
+              disabled={isProcessing}
+              isLoading={isProcessing}
+              onClick={onRescan}
+              leftIcon={!isProcessing ? <RotateCcw className="h-4 w-4" /> : undefined}
+            >
+              Rescan
+            </Button>
+          )}
+
           {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED" || project.status === "FINALIZED") && (
             <>
               <Link href={`/projects/${project.id}/reports`}>
