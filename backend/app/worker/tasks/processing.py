@@ -1,7 +1,7 @@
 from celery import shared_task
 from app.db.session import SessionLocal
 from app.models.core import (
-    ProcessingJob, ProcessingJobStatus, Document, Extraction,
+    ProcessingJob, ProcessingJobStatus, Document, DocumentStatus, Extraction,
     CanonicalLineItem, MatchGroup, Discrepancy, Project, ProjectStatus
 )
 from app.integrations.ai import get_ai_provider
@@ -60,6 +60,9 @@ def _update_job_status(job_id, status, error=None, project_id=None):
             if project:
                 if status == ProcessingJobStatus.COMPLETED:
                     project.status = ProjectStatus.REVIEW_REQUIRED
+                    db.query(Document).filter(Document.project_id == project_id).update(
+                        {"status": DocumentStatus.COMPLETED}, synchronize_session=False
+                    )
                 elif status == ProcessingJobStatus.FAILED:
                     project.status = ProjectStatus.FAILED
                 elif status in [ProcessingJobStatus.VALIDATING, ProcessingJobStatus.EXTRACTING, ProcessingJobStatus.NORMALIZING, ProcessingJobStatus.MATCHING, ProcessingJobStatus.COMPARING, ProcessingJobStatus.GENERATING_DISCREPANCIES]:
