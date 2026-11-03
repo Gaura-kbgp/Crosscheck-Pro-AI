@@ -9,7 +9,6 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import {
   LayoutDashboard,
   FolderKanban,
-  FileText,
   GitCompare,
   CheckSquare,
   FileSpreadsheet,
@@ -31,11 +30,6 @@ const mainNavItems = [
     title: "Projects",
     href: "/projects",
     icon: FolderKanban,
-  },
-  {
-    title: "Documents",
-    href: "/documents",
-    icon: FileText,
   },
   {
     title: "Cross-Check",
