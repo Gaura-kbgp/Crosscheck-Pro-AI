@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from typing import List, Dict, Optional, Tuple, Set, Any
 from uuid import uuid4, UUID
@@ -121,9 +122,15 @@ _CONFIG_STOPWORDS = {
 
 
 def _significant_tokens(text: Optional[str]) -> Set[str]:
-    """Lowercased word tokens of length >= 4, minus generic connector/qualifier words."""
+    """
+    Lowercased word tokens of length >= 4, minus generic connector/qualifier
+    words. Splits on ANY non-alphanumeric character, not just whitespace —
+    "Sagewood/PHW" (slash-joined, common in Design page headers) must
+    tokenize the same as "Sagewood PHW" (space-joined, common in Order rows).
+    """
     normalized = normalize_text(text or "") or ""
-    return {t for t in normalized.split() if len(t) >= 4 and t not in _CONFIG_STOPWORDS}
+    tokens = re.split(r'[^A-Z0-9]+', normalized)
+    return {t.lower() for t in tokens if len(t) >= 4 and t.lower() not in _CONFIG_STOPWORDS}
 
 
 def _collect_order_configs(
