@@ -131,7 +131,6 @@ function DocumentsContent() {
           <Button
             onClick={() => setIsUploadModalOpen(true)}
             leftIcon={<Upload className="h-4 w-4" />}
-            disabled={projects.length === 0}
           >
             Upload Document
           </Button>

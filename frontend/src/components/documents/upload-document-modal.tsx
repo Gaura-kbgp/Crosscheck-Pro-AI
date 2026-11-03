@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Project, DocumentType } from "@/lib/api/types";
 import { documentsApi } from "@/lib/api/endpoints";
+import { useCreateProject } from "@/lib/hooks/use-projects";
 import {
   Dialog,
   DialogHeader,
@@ -33,6 +34,7 @@ interface UploadDocumentModalProps {
 }
 
 const DOC_TYPES: DocumentType[] = ["DESIGN", "ORDER", "ACKNOWLEDGEMENT"];
+const NEW_PROJECT_VALUE = "__new__";
 
 const ACCEPTED_EXTENSIONS = [
   ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff",
@@ -159,7 +161,9 @@ export function UploadDocumentModal({
   onOpenChange,
   onSuccess,
 }: UploadDocumentModalProps) {
+  const createProject = useCreateProject();
   const [selectedProjectId, setSelectedProjectId] = useState<string>(defaultProjectId);
+  const [newProjectName, setNewProjectName] = useState("");
   const [slots, setSlots] = useState<Record<DocumentType, SlotState>>(emptySlots());
   const [dragOverType, setDragOverType] = useState<DocumentType | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -169,9 +173,12 @@ export function UploadDocumentModal({
     if (open) {
       if (defaultProjectId) {
         setSelectedProjectId(defaultProjectId);
-      } else if (projects.length > 0 && !selectedProjectId) {
+      } else if (projects.length === 0) {
+        setSelectedProjectId(NEW_PROJECT_VALUE);
+      } else if (!selectedProjectId) {
         setSelectedProjectId(projects[0].id);
       }
+      setNewProjectName("");
       setSlots(emptySlots());
       setFormError(null);
       setIsSubmitting(false);
@@ -212,6 +219,10 @@ export function UploadDocumentModal({
       setFormError("Please select a project.");
       return;
     }
+    if (selectedProjectId === NEW_PROJECT_VALUE && !newProjectName.trim()) {
+      setFormError("Please enter a project name.");
+      return;
+    }
     if (pendingTypes.length === 0) {
       setFormError("Add at least one file to upload.");
       return;
@@ -219,10 +230,23 @@ export function UploadDocumentModal({
 
     setFormError(null);
     setIsSubmitting(true);
+
+    let projectId = selectedProjectId;
+    if (selectedProjectId === NEW_PROJECT_VALUE) {
+      try {
+        const created = await createProject.mutateAsync({ name: newProjectName.trim() });
+        projectId = created.id;
+      } catch {
+        setFormError("Failed to create project. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     pendingTypes.forEach((t) => setSlot(t, { status: "uploading", error: null }));
 
     const results = await Promise.allSettled(
-      pendingTypes.map((t) => documentsApi.upload(selectedProjectId, t, slots[t].file as File))
+      pendingTypes.map((t) => documentsApi.upload(projectId, t, slots[t].file as File))
     );
 
     results.forEach((res, i) => {
@@ -241,7 +265,7 @@ export function UploadDocumentModal({
 
     if (results.every((r) => r.status === "fulfilled")) {
       setTimeout(() => {
-        if (onSuccess) onSuccess(selectedProjectId);
+        if (onSuccess) onSuccess(projectId);
         onOpenChange(false);
       }, 900);
     }
@@ -276,7 +300,7 @@ export function UploadDocumentModal({
         <div className="space-y-1.5">
           <label className="flex items-center gap-1.5 text-xs font-bold text-[#0F2747]">
             <Folder className="h-3.5 w-3.5 text-[#58708F]" />
-            Select Project
+            Project
           </label>
           <select
             value={selectedProjectId}
@@ -288,12 +312,24 @@ export function UploadDocumentModal({
             <option value="" disabled>
               -- Select a project --
             </option>
+            <option value={NEW_PROJECT_VALUE}>➕ Create New Project</option>
             {projects.map((proj) => (
               <option key={proj.id} value={proj.id}>
                 {proj.name}
               </option>
             ))}
           </select>
+          {selectedProjectId === NEW_PROJECT_VALUE && (
+            <input
+              type="text"
+              placeholder="Project name (e.g. Hartland Kitchen)"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full rounded-lg border border-[#DCE6F0] bg-white px-3 py-2 text-xs font-medium text-[#0F2747] placeholder:text-[#A0B0C4] focus:border-[#0EA5E9] focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]"
+              autoFocus
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
