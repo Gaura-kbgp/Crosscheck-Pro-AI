@@ -17,7 +17,8 @@ export type CrossCheckStatus =
   | "CHANGED"
   | "MISSING"
   | "EXTRA"
-  | "UNCERTAIN";
+  | "UNCERTAIN"
+  | "OUT_OF_SCOPE";
 
 export type ReviewStatus =
   | "OPEN"
@@ -446,6 +447,7 @@ export interface CrossCheckResult {
     missing: number;
     extra: number;
     uncertain: number;
+    out_of_scope: number;
     critical_discrepancies: number;
     open_reviews: number;
   };

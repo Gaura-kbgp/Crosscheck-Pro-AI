@@ -436,6 +436,7 @@ class MatchGroupStatus(str, enum.Enum):
     EXTRA = "EXTRA"
     CHANGED = "CHANGED"
     UNCERTAIN = "UNCERTAIN"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
 
 class Severity(str, enum.Enum):
     CRITICAL = "Critical"

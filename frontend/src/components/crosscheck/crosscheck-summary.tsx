@@ -7,6 +7,7 @@ import {
   FileMinus,
   FilePlus,
   AlertOctagon,
+  Ban,
 } from "lucide-react";
 
 interface CrossCheckSummaryProps {
@@ -71,11 +72,21 @@ export function CrossCheckSummary({
       textColor: "text-slate-700",
       activeRing: "ring-2 ring-slate-500 bg-slate-100/60 shadow-md",
     },
+    {
+      key: "OUT_OF_SCOPE",
+      label: "Out of Scope",
+      value: summary.out_of_scope,
+      icon: <Ban className="h-5 w-5 text-sky-500" />,
+      bg: "bg-sky-50",
+      border: "border-sky-200",
+      textColor: "text-sky-700",
+      activeRing: "ring-2 ring-sky-500 bg-sky-100/60 shadow-md",
+    },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((stat) => {
           const isSelected = selectedFilter === stat.key;
           return (

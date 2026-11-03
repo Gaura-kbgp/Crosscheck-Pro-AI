@@ -99,6 +99,8 @@ function MatchGroupCard({ group, onClick }: { group: MatchGroup; onClick: () => 
         return "bg-rose-100 text-rose-700 hover:bg-rose-200";
       case "EXTRA":
         return "bg-purple-100 text-purple-700 hover:bg-purple-200";
+      case "OUT_OF_SCOPE":
+        return "bg-sky-100 text-sky-700 hover:bg-sky-200";
       default:
         return "bg-slate-100 text-slate-700 hover:bg-slate-200";
     }

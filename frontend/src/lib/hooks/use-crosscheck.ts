@@ -69,6 +69,7 @@ export function useCrossCheck(projectId: string | undefined) {
         missing: groups.filter(g => g.status === "MISSING").length,
         extra: groups.filter(g => g.status === "EXTRA").length,
         uncertain: groups.filter(g => g.status === "UNCERTAIN").length,
+        out_of_scope: groups.filter(g => g.status === "OUT_OF_SCOPE").length,
         critical_discrepancies: discrepancySummary.critical,
         open_reviews: discrepancySummary.open + discrepancySummary.escalated,
       };

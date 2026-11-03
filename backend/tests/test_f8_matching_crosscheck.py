@@ -4,7 +4,7 @@ from app.models.core import CanonicalLineItem, DocumentType, MatchGroupStatus, S
 from app.engines.matching import MatchingEngine
 from app.engines.crosscheck import CrossCheckEngine
 
-def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=None):
+def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=None, door_style=None):
     return CanonicalLineItem(
         id=uuid4(),
         project_id=uuid4(),
@@ -15,7 +15,8 @@ def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=Non
         quantity=qty,
         dimensions=dimensions,
         finish=finish,
-        substitution_sku=sub_sku
+        substitution_sku=sub_sku,
+        door_style=door_style
     )
 
 def test_exact_3way_matching():
@@ -98,6 +99,36 @@ def test_missing_and_extra_detection():
     crosscheck = CrossCheckEngine()
     discs = crosscheck.evaluate(groups, proj_id, org_id)
     assert any(disc.field == "item_presence" and disc.introduced_at == DocumentType.ORDER for disc in discs)
+
+def test_design_item_from_unrelated_display_is_out_of_scope_not_missing():
+    # A Design document can be a multi-display catalog spanning far more
+    # than the one order being verified. Order+Ack here are scoped to
+    # Monroe/Sagewood; the Design document also contains a trim code from
+    # an unrelated Jamestown/Dewdrop display sharing the same SKU token.
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+
+    d_in_scope = make_item(DocumentType.DESIGN, "W1848R", 1, finish="Monroe Sagewood", door_style="Monroe")
+    o = make_item(DocumentType.ORDER, "W1848R", 1, finish="Monroe Sagewood", door_style="Monroe")
+    a = make_item(DocumentType.ACKNOWLEDGEMENT, "W1848R", 1, finish="Monroe Sagewood", door_style="Monroe")
+
+    d_unrelated_display = make_item(DocumentType.DESIGN, "TUKT", 1, finish="Jamestown Dewdrop", door_style="Jamestown")
+
+    groups = matcher.match_items(
+        [d_in_scope, d_unrelated_display], [o], [a], proj_id, org_id
+    )
+
+    matched_group = next(g for g in groups if g.design_item_id == d_in_scope.id)
+    assert matched_group.status == MatchGroupStatus.MATCHED
+
+    unrelated_group = next(g for g in groups if g.design_item_id == d_unrelated_display.id)
+    assert unrelated_group.status == MatchGroupStatus.OUT_OF_SCOPE
+
+    # OUT_OF_SCOPE items must never generate a "missing from order" alert.
+    crosscheck = CrossCheckEngine()
+    discs = crosscheck.evaluate(groups, proj_id, org_id)
+    assert not any(disc.match_group_id == unrelated_group.id for disc in discs)
 
 def test_safe_introduced_at_with_unspecified_design_dimension():
     proj_id = uuid4()

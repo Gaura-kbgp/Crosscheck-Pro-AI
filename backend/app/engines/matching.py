@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import List, Dict, Optional, Tuple, Set, Any
 from uuid import uuid4, UUID
 
@@ -106,6 +107,76 @@ def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMa
     return units
 
 
+def _collect_order_configs(
+    order_units: List[CanonicalMatchingUnit], ack_units: List[CanonicalMatchingUnit]
+) -> Tuple[Set[str], Set[str]]:
+    """
+    Every distinct door_style and finish explicitly present anywhere in
+    Order/Ack. A Design document can be a multi-display/multi-room catalog
+    (e.g. a dealer's full showroom brief) spanning far more than this order,
+    but Order/Ack items always belong to it. Used to recognize design items
+    that don't correspond to ANY item in this order at all — not by guessing
+    a single "correct" display, which is unsafe when the order itself spans
+    several displays (a dealer ordering for multiple rooms at once), but by
+    checking whether the design item's finish/door_style shows up anywhere
+    in the order.
+    """
+    door_styles: Set[str] = set()
+    finishes: Set[str] = set()
+    for unit in list(order_units) + list(ack_units):
+        door = normalize_text(unit.door_style or "") or ""
+        fin = normalize_text(unit.finish or "") or ""
+        if door:
+            door_styles.add(door)
+        if fin:
+            finishes.add(fin)
+    return door_styles, finishes
+
+
+def _is_out_of_scope(
+    unit: CanonicalMatchingUnit, order_door_styles: Set[str], order_finishes: Set[str]
+) -> bool:
+    """
+    True only when the unit has an explicit door_style or finish and NEITHER
+    appears anywhere in Order/Ack — i.e. it belongs to no display the order
+    touches at all. Blank/unspecified fields are never treated as evidence
+    of exclusion ("blank fields mean unspecified, not false"), and a single
+    field matching anywhere in the order is enough to keep it in scope.
+    """
+    door = normalize_text(unit.door_style or "") or ""
+    fin = normalize_text(unit.finish or "") or ""
+    explicit_checks = []
+    if door and order_door_styles:
+        explicit_checks.append(door in order_door_styles)
+    if fin and order_finishes:
+        explicit_checks.append(fin in order_finishes)
+    if not explicit_checks:
+        return False
+    return not any(explicit_checks)
+
+
+def _best_config_match(
+    reference: CanonicalMatchingUnit, candidates: List[CanonicalMatchingUnit]
+) -> Optional[CanonicalMatchingUnit]:
+    """
+    Disambiguates same-SKU duplicate candidates (e.g. a generic trim code
+    reused across several displays/rooms) by finish/door_style when
+    dimensions aren't available. Returns a candidate only when exactly one
+    of them shares the reference's finish or door_style — otherwise None,
+    so the caller abstains to UNCERTAIN rather than guessing.
+    """
+    ref_fin = normalize_text(reference.finish or "") or ""
+    ref_door = normalize_text(reference.door_style or "") or ""
+    if not ref_fin and not ref_door:
+        return None
+    matches = [
+        c for c in candidates
+        if (ref_fin and normalize_text(c.finish or "") == ref_fin)
+        or (ref_door and normalize_text(c.door_style or "") == ref_door)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 class MatchingEngine:
     """
     Production-grade multi-tier deterministic matching engine.
@@ -126,9 +197,23 @@ class MatchingEngine:
     ) -> List[MatchGroup]:
         
         # 1. Pre-Matching Document-Level Aggregation into Canonical Matching Units
-        design_units = aggregate_document_items(design_items)
+        design_units_all = aggregate_document_items(design_items)
         order_units = aggregate_document_items(order_items)
         ack_units = aggregate_document_items(ack_items)
+
+        # Design documents are sometimes a multi-display/multi-room catalog
+        # spanning far more than the order being verified. Exclude design
+        # items whose explicit door style/finish doesn't correspond to ANY
+        # item anywhere in Order/Ack — not a single "most common" display,
+        # which misfires when the order itself covers several displays —
+        # instead of letting unrelated-display items collide with this
+        # order's SKUs and surface as noisy EXTRA/UNCERTAIN findings (see
+        # brief: "do not assume every page is the same room").
+        order_door_styles, order_finishes = _collect_order_configs(order_units, ack_units)
+        out_of_scope_design_units = [
+            u for u in design_units_all if _is_out_of_scope(u, order_door_styles, order_finishes)
+        ]
+        design_units = [u for u in design_units_all if u not in out_of_scope_design_units]
 
         match_groups: List[MatchGroup] = []
         
@@ -262,26 +347,44 @@ class MatchingEngine:
                 match_groups.append(_commit_match(d, None, cand_acks[0], MatchGroupStatus.CHANGED, "TIER_1_DESIGN_ACK", 0.90, "Match between Design and Ack"))
                 continue
 
-            # Case 1D: Duplicate Ambiguity / Dimension Disambiguation
+            # Case 1D: Duplicate Ambiguity / Dimension or Finish-Door-Style Disambiguation
             if len(same_d_units) > 1 or len(cand_orders) > 1 or len(cand_acks) > 1 or order_has_competing_d or ack_has_competing_d:
                 matched_o = None
                 matched_a = None
+                disambiguated_by = None
 
-                # Disambiguate Order using non-empty dimensions
+                # Disambiguate Order using non-empty dimensions first, then
+                # finish/door style (e.g. a generic trim code reused across
+                # several displays/rooms in a multi-display order — no
+                # dimensions to compare, but each candidate's finish ties it
+                # to a specific display).
                 if d.dimensions:
                     for o in cand_orders:
                         if o.dimensions and are_dimensions_equivalent(d.dimensions, o.dimensions)[0]:
                             matched_o = o
+                            disambiguated_by = "dimensions"
                             break
-                    target_dims = matched_o.dimensions if matched_o else d.dimensions
+                if not matched_o:
+                    matched_o = _best_config_match(d, cand_orders)
+                    if matched_o:
+                        disambiguated_by = "finish/door style"
+
+                target_dims = matched_o.dimensions if matched_o else d.dimensions
+                target_config_unit = matched_o or d
+                if target_dims:
                     for a in cand_acks:
                         if a.dimensions and are_dimensions_equivalent(target_dims, a.dimensions)[0]:
                             matched_a = a
+                            disambiguated_by = disambiguated_by or "dimensions"
                             break
+                if not matched_a:
+                    matched_a = _best_config_match(target_config_unit, cand_acks)
+                    if matched_a:
+                        disambiguated_by = disambiguated_by or "finish/door style"
 
                 if matched_o or matched_a:
                     status = MatchGroupStatus.MATCHED if (matched_o and not (matched_a and matched_a.substitution_sku)) else MatchGroupStatus.CHANGED
-                    match_groups.append(_commit_match(d, matched_o, matched_a, status, "TIER_3_SKU_DIMENSIONS_DISAMBIGUATION", 0.92, "Disambiguated duplicate SKU by dimensions"))
+                    match_groups.append(_commit_match(d, matched_o, matched_a, status, "TIER_3_SKU_DISAMBIGUATION", 0.92, f"Disambiguated duplicate SKU by {disambiguated_by}"))
                 else:
                     # Ambiguous duplicate: Abstain ALL competing candidate units to UNCERTAIN
                     all_competing_d = set(same_d_units)
@@ -336,6 +439,17 @@ class MatchingEngine:
             if a.id not in consumed_ack:
                 match_groups.append(_commit_match(None, None, a, MatchGroupStatus.EXTRA, "UNMATCHED_ACK", 1.0, "Extra item in Acknowledgement"))
 
+        # =============================================================
+        # Pass 4: Design units excluded as belonging to a display/room this
+        # order never touches at all (see _collect_order_configs above)
+        # =============================================================
+        for d in out_of_scope_design_units:
+            match_groups.append(_commit_match(
+                d, None, None, MatchGroupStatus.OUT_OF_SCOPE, "SCOPE_FILTER", 1.0,
+                f"Design item's door style/finish ('{d.door_style or '—'}' / '{d.finish or '—'}') "
+                f"doesn't match any item in the Purchase Order or Acknowledgement"
+            ))
+
         # Final status pass
         for mg in match_groups:
             mg.status = self._evaluate_match_group_status(mg)
@@ -343,8 +457,8 @@ class MatchingEngine:
         return match_groups
 
     def _evaluate_match_group_status(self, mg: MatchGroup) -> MatchGroupStatus:
-        if mg.status == MatchGroupStatus.UNCERTAIN:
-            return MatchGroupStatus.UNCERTAIN
+        if mg.status in (MatchGroupStatus.UNCERTAIN, MatchGroupStatus.OUT_OF_SCOPE):
+            return mg.status
 
         has_d = mg.design_item_id is not None
         has_o = mg.order_item_id is not None

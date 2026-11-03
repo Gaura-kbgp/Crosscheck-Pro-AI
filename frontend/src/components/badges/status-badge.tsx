@@ -20,6 +20,7 @@ import {
   Info,
   Check,
   Lock,
+  Ban,
 } from "lucide-react";
 
 export function CrossCheckStatusBadge({ status }: { status: CrossCheckStatus }) {
@@ -57,6 +58,13 @@ export function CrossCheckStatusBadge({ status }: { status: CrossCheckStatus }) 
         <Badge variant="secondary" className="gap-1 font-semibold">
           <HelpCircle className="h-3.5 w-3.5" />
           Uncertain
+        </Badge>
+      );
+    case "OUT_OF_SCOPE":
+      return (
+        <Badge variant="outline" className="gap-1 font-semibold text-sky-700 border-sky-200 bg-sky-50">
+          <Ban className="h-3.5 w-3.5" />
+          Out of Scope
         </Badge>
       );
     default:

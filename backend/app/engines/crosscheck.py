@@ -105,6 +105,13 @@ class CrossCheckEngine:
         o_item = mg.order_item
         a_item = mg.ack_item
 
+        # Design items excluded as belonging to a different display/room
+        # scope than this order (see engines/matching.py _detect_order_scope)
+        # never generate a discrepancy — they aren't missing from the order,
+        # they were never part of it.
+        if mg.status == MatchGroupStatus.OUT_OF_SCOPE:
+            return []
+
         mg_cat = self._get_mg_category(mg)
 
         # Enforce Discrepancy Exclusion Policy:

@@ -48,6 +48,8 @@ export function MatchGroupDetailDrawer({ group, isOpen, onClose }: MatchGroupDet
         return "bg-rose-100 text-rose-700";
       case "EXTRA":
         return "bg-purple-100 text-purple-700";
+      case "OUT_OF_SCOPE":
+        return "bg-sky-100 text-sky-700";
       default:
         return "bg-slate-100 text-slate-700";
     }
