@@ -83,27 +83,9 @@ class _FallbackAIProvider(AIProvider):
 
 def get_ai_provider() -> AIProvider:
     """
-    Returns the active AI provider based on configuration.
-    Respects AI_PROVIDER explicit choice, else defaults based on available API keys.
-    If a Gemini key is configured and it isn't already the primary, extraction
-    calls automatically fall back to Gemini when the primary provider fails.
+    Returns the active AI provider. Always uses OpenAI when a key is present;
+    retries up to 3× on transient 503/429 errors before failing.
     """
-    provider_name = (settings.AI_PROVIDER or "").lower().strip()
-
-    if provider_name == "gemini":
-        primary: AIProvider = GeminiProvider()
-    elif provider_name == "openai":
-        primary = OpenAIProvider()
-    elif settings.OPENAI_API_KEY:
-        primary = OpenAIProvider()
-    else:
-        primary = GeminiProvider()
-
-    secondary: AIProvider | None = None
-    if not isinstance(primary, GeminiProvider) and settings.GEMINI_API_KEY:
-        secondary = GeminiProvider()
-
-    if secondary is None:
-        return primary
-    return _FallbackAIProvider(primary, secondary)
+    primary: AIProvider = OpenAIProvider() if settings.OPENAI_API_KEY else GeminiProvider()
+    return _FallbackAIProvider(primary, None)
 
