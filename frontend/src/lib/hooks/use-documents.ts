@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { documentsApi, processingApi } from "@/lib/api/endpoints";
-import { DocumentType, ProcessingJobResponse } from "@/lib/api/types";
+import { DocumentResponse, DocumentType, ProcessingJobResponse } from "@/lib/api/types";
 import { PROJECT_KEYS } from "./use-projects";
 
 const ACCEPTED_DOCUMENT_EXTENSIONS = [
@@ -63,7 +63,15 @@ export function useUploadDocument(projectId: string) {
       }
       return documentsApi.upload(projectId, documentType, file);
     },
-    onSuccess: () => {
+    onSuccess: (newDoc: DocumentResponse) => {
+      // Immediately update the cache so the uploaded doc appears without waiting for the refetch
+      queryClient.setQueryData<DocumentResponse[]>(
+        DOCUMENT_KEYS.projectDocuments(projectId),
+        (old = []) => {
+          const filtered = old.filter((d) => d.document_type !== newDoc.document_type);
+          return [...filtered, newDoc];
+        }
+      );
       queryClient.invalidateQueries({
         queryKey: DOCUMENT_KEYS.projectDocuments(projectId),
       });
