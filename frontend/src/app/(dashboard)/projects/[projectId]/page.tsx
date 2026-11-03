@@ -64,7 +64,7 @@ export default function ProjectDetailPage() {
   // keep working even when this component remounted mid-processing.
   const { data: latestJobData } = useLatestJob(
     projectId,
-    !activeJobId && project?.status === "PROCESSING"
+    !activeJobId && (project?.status === "PROCESSING" || project?.status === "FAILED")
   );
   useEffect(() => {
     if (!activeJobId && latestJobData?.id) {
