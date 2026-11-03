@@ -15,6 +15,16 @@ CRITICAL INSTRUCTIONS:
    - description: Item description text.
    - quantity: Confirmed quantity.
    - dimensions: Acknowledged dimensions.
+   - finish / door_style: An acknowledgement almost always states its door style and finish ONCE,
+     at the header/title-block level for the whole order or for each display section within it
+     (e.g. "Monroe / Sagewood / PHW", "Door Style: Monroe", "Finish: Sagewood"), rather than
+     repeating it on every individual line row. When that is the case, fill `finish` and
+     `door_style` on EVERY line item belonging to that same order/display section with the
+     header's value — do not leave them null just because the value wasn't printed again next to
+     that specific row. If one row explicitly overrides the header with its own different finish/
+     door style, use that row-level value instead for that row only. Only leave finish/door_style
+     null when the document truly gives no finish/door style at all — never fabricate a value that
+     isn't printed anywhere in the document.
    - price: Confirmed unit or extended price.
    - ack_status: Acknowledged status (e.g. "CONFIRMED", "SUBSTITUTED", "REJECTED", "BACKORDERED", "MODIFIED").
    

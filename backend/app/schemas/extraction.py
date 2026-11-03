@@ -104,6 +104,8 @@ class AcknowledgementExtractionItem(BaseModel):
     description: Optional[str] = None
     quantity: Optional[int] = None
     dimensions: Optional[Dict[str, Any]] = None
+    finish: Optional[str] = None
+    door_style: Optional[str] = None
     price: Optional[str] = None
     ack_status: Optional[str] = None
     substitution_sku: Optional[str] = None

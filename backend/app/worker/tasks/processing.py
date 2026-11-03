@@ -391,6 +391,8 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     source_meta["line_number"] = item.get("line_number")
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ACKNOWLEDGEMENT":
+                    canonical.finish = item.get("finish")
+                    canonical.door_style = item.get("door_style")
                     canonical.acknowledgement_status = item.get("ack_status")
                     canonical.substitution_sku = item.get("substitution_sku")
                     canonical.rejection_reason = item.get("rejection_reason")
