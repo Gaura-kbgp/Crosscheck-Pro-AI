@@ -24,10 +24,12 @@ CRITICAL INSTRUCTIONS:
      states door style/finish once in a header/title block for a whole section rather than on every
      row — when that is the case, fill `finish`/`door_style` on every row in that section with the
      header's value rather than leaving it null, unless a specific row explicitly overrides it.
-   - finish_status / door_style_status: Whenever you fill `finish` (or `door_style`), also report HOW
-     you got that value — "OBSERVED" if printed directly on this row, or "INHERITED_EXPLICIT" if
-     carried down from a section header rather than this row. Leave both null when
-     `finish`/`door_style` itself is null.
+   - finish_status / door_style_status: REQUIRED whenever `finish` or `door_style` is non-null — do
+     not omit these fields from your JSON. Set to the literal string "OBSERVED" if printed directly
+     on this row, or "INHERITED_EXPLICIT" if carried down from a section header rather than this
+     row. Example: {"sku": "W1848L", "finish": "MONROE PHW SAGEWOOD", "finish_status":
+     "INHERITED_EXPLICIT", ...}. Leave both status fields null ONLY when `finish`/`door_style`
+     itself is null.
    - price: Line item unit price or total price.
    - line_number: Line number exactly as printed in the PO table (e.g. "5", "*47").
    - confidence: Numeric score between 0.0 and 1.0 reflecting extraction certainty.

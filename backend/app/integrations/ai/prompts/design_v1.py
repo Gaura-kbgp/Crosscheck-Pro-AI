@@ -46,10 +46,16 @@ CRITICAL EXTRACTION RULES:
      finish/door style, use that item-level value instead for that item only. Only leave finish/
      door_style null when the document truly gives no finish/door style at all for that display —
      never fabricate a value that isn't printed anywhere on the page(s) for that display.
-   - finish_status / door_style_status: Whenever you fill `finish` (or `door_style`), also report HOW
-     you got that value — "OBSERVED" if it was printed directly on/next to this specific item's own
-     row, or "INHERITED_EXPLICIT" if you carried it down from the display/elevation header rather
-     than this row. Leave both null when `finish`/`door_style` itself is null (nothing to report).
+   - finish_status / door_style_status: REQUIRED whenever `finish` or `door_style` is non-null — do
+     not omit these fields from your JSON. Set `finish_status` to the literal string "OBSERVED" if
+     the finish was printed directly on/next to THIS item's own row, or "INHERITED_EXPLICIT" if you
+     carried it down from the display/elevation header instead. Same rule for `door_style_status`.
+     Example: a header reads "FINISH | SAGEWOOD/PHW" and a cabinet row below it has no finish of its
+     own — you output {"sku": "W1848L", "finish": "SAGEWOOD/PHW", "finish_status": "INHERITED_EXPLICIT",
+     "door_style": "MONROE", "door_style_status": "INHERITED_EXPLICIT", ...}. If instead that row
+     itself printed "W1848L — Cashmere", you output {"sku": "W1848L", "finish": "Cashmere",
+     "finish_status": "OBSERVED", ...}. Leave both status fields null ONLY when `finish`/`door_style`
+     itself is null.
    - modifications / accessories: Explicit modification codes, roll-outs, or special accessory callouts.
    - drawing_reference / position: Drawing number, elevation, or wall reference (e.g., "El 1", "El 2", "Island").
    - confidence: Numeric score between 0.0 and 1.0 reflecting extraction certainty.
