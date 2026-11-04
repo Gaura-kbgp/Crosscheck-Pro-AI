@@ -315,6 +315,37 @@ class OpenAIProvider(AIProvider):
             return []
         return parsed.get("items", []) if isinstance(parsed, dict) else []
 
+    def _dedupe_design_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merges items that share the same SKU and page_number — the text and
+        Vision passes over a DESIGN document commonly both see the exact
+        same physical cabinet/trim callout (it's in the text layer AND
+        visible on the rendered page), which would otherwise double-count
+        it. Items without a usable sku+page_number pair (e.g. a page
+        marker wasn't available) are kept as-is, never dropped.
+        """
+        merged: Dict[Any, Dict[str, Any]] = {}
+        order: List[Any] = []
+        passthrough: List[Dict[str, Any]] = []
+        for item in items:
+            sku = (item.get("sku") or "").strip().upper()
+            page = item.get("page_number")
+            if not sku or page is None:
+                passthrough.append(item)
+                continue
+            key = (sku, page)
+            if key not in merged:
+                merged[key] = dict(item)
+                order.append(key)
+            else:
+                existing = merged[key]
+                for field, value in item.items():
+                    if value not in (None, "", []) and existing.get(field) in (None, "", []):
+                        existing[field] = value
+                if (item.get("confidence") or 0) > (existing.get("confidence") or 0):
+                    existing["confidence"] = item.get("confidence")
+        return passthrough + [merged[k] for k in order]
+
     def _vision_batch_extract(
         self,
         file_bytes: bytes,
@@ -462,7 +493,13 @@ class OpenAIProvider(AIProvider):
                 # does not mean drawing labels were extracted completely).
                 if doc_type == "DESIGN" and self.client:
                     vision_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt)
-                    merged_items.extend(vision_items)
+                    # The text and Vision passes frequently both see the SAME
+                    # physical item (whatever is in the text layer is also
+                    # visible on the rendered page) — merge same-SKU/same-page
+                    # hits into one item instead of double-counting it, while
+                    # still keeping genuinely Vision-only (graphics-only)
+                    # callouts that the text pass never saw.
+                    merged_items = self._dedupe_design_items(merged_items + vision_items)
 
                 return {"items": merged_items, "_page_evidence": page_evidence}
             else:

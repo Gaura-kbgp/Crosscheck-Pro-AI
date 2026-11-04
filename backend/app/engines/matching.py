@@ -63,6 +63,7 @@ class CanonicalMatchingUnit:
         self.finish = self.primary_item.finish
         self.door_style = self.primary_item.door_style
         self.modifications = self.primary_item.modifications
+        self.notes = getattr(self.primary_item, "notes", None)
         self.substitution_sku = getattr(self.primary_item, "substitution_sku", None)
 
         for item in raw_items[1:]:
@@ -74,6 +75,8 @@ class CanonicalMatchingUnit:
                 self.finish = item.finish
             if not self.door_style and item.door_style:
                 self.door_style = item.door_style
+            if not self.notes and getattr(item, "notes", None):
+                self.notes = item.notes
             if not self.substitution_sku and getattr(item, "substitution_sku", None):
                 self.substitution_sku = item.substitution_sku
 
@@ -168,24 +171,35 @@ def _is_out_of_scope(unit: CanonicalMatchingUnit, order_config_tokens: Set[str])
     return unit_tokens.isdisjoint(order_config_tokens)
 
 
+def _config_tokens(unit: CanonicalMatchingUnit) -> Set[str]:
+    """
+    Significant words from finish/door_style, plus notes — a design line's
+    free-text note ("Doorstyle changed to apex — not shown") is sometimes
+    the ONLY place a display's identity survives when the structured
+    finish/door_style field came back blank for that specific row.
+    """
+    return (
+        _significant_tokens(unit.finish)
+        | _significant_tokens(unit.door_style)
+        | _significant_tokens(getattr(unit, "notes", None))
+    )
+
+
 def _best_config_match(
     reference: CanonicalMatchingUnit, candidates: List[CanonicalMatchingUnit]
 ) -> Optional[CanonicalMatchingUnit]:
     """
     Disambiguates same-SKU duplicate candidates (e.g. a generic trim code
-    reused across several displays/rooms) by finish/door_style word overlap
-    when dimensions aren't available. Returns a candidate only when exactly
-    one of them has the strictly highest overlap (>= 1 shared word) with the
-    reference — any tie, or zero overlap across the board, abstains to None
-    so the caller falls through to UNCERTAIN rather than guessing.
+    reused across several displays/rooms) by finish/door_style/notes word
+    overlap when dimensions aren't available. Returns a candidate only when
+    exactly one of them has the strictly highest overlap (>= 1 shared word)
+    with the reference — any tie, or zero overlap across the board, abstains
+    to None so the caller falls through to UNCERTAIN rather than guessing.
     """
-    ref_tokens = _significant_tokens(reference.finish) | _significant_tokens(reference.door_style)
+    ref_tokens = _config_tokens(reference)
     if not ref_tokens:
         return None
-    scored = [
-        (len(ref_tokens & (_significant_tokens(c.finish) | _significant_tokens(c.door_style))), c)
-        for c in candidates
-    ]
+    scored = [(len(ref_tokens & _config_tokens(c)), c) for c in candidates]
     scored = [(score, c) for score, c in scored if score > 0]
     if not scored:
         return None
