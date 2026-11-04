@@ -1,7 +1,7 @@
 import pytest
 from uuid import uuid4
 from app.models.core import CanonicalLineItem, DocumentType, MatchGroupStatus, Severity
-from app.engines.matching import MatchingEngine
+from app.engines.matching import MatchingEngine, _dedup_view_types
 from app.engines.crosscheck import CrossCheckEngine
 
 def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=None, door_style=None, notes=None, finish_status=None):
@@ -171,3 +171,77 @@ def test_safe_introduced_at_with_unspecified_design_dimension():
     # Since Design was unspecified and Order = Ack, there should be NO dimension discrepancy
     dim_discs = [disc for disc in discs if disc.field == "dimensions"]
     assert len(dim_discs) == 0
+
+
+# =========================================================================
+# Phase 3: view_type deduplication — FLOORPLAN+ELEVATION double-count fix
+# =========================================================================
+
+def _vt_item(sku, qty, view_type, position, finish=None):
+    return CanonicalLineItem(
+        id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
+        source_type=DocumentType.DESIGN,
+        raw_sku=sku, normalized_sku=sku, quantity=qty,
+        finish=finish,
+        source_metadata={"view_type": view_type, "position": position},
+    )
+
+
+def test_elevation_wins_over_floorplan_same_display():
+    # B24BP: Display 4 FLOORPLAN qty=3, ELEVATION qty=2 → keep ELEVATION
+    items = [
+        _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
+        _vt_item("B24BP", 2, "ELEVATION", "Display 4: Island - Front"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert result[0].quantity == 2
+
+
+def test_different_displays_not_deduplicated():
+    # Same SKU in Display 1 and Display 2 → both ELEVATION → keep both (2 items)
+    items = [
+        _vt_item("W3015BP", 2, "ELEVATION", "Display 1: Kitchen"),
+        _vt_item("W3015BP", 1, "ELEVATION", "Display 2: Built-In"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 2
+
+
+def test_schedule_beats_elevation():
+    items = [
+        _vt_item("SHC3", 2, "ELEVATION", "Display 4: Island"),
+        _vt_item("SHC3", 2, "SCHEDULE", "Display 4: Island"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert (result[0].source_metadata or {}).get("view_type") == "SCHEDULE"
+
+
+def test_no_view_type_passthrough():
+    # Items without view_type (ORDER, ACK) are never filtered
+    item = CanonicalLineItem(
+        id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
+        source_type=DocumentType.ORDER, raw_sku="B24BP", quantity=1,
+    )
+    result = _dedup_view_types([item])
+    assert len(result) == 1
+
+
+def test_floorplan_elevation_match_no_false_missing():
+    # End-to-end: DESIGN has FLOORPLAN+ELEVATION for same display, ORDER has 1
+    # → should match (MATCHED or MATCHED with possible qty discrepancy), NOT MISSING
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+    d_fp = _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island")
+    d_el = _vt_item("B24BP", 2, "ELEVATION", "Display 4: Island - Front")
+    o = CanonicalLineItem(
+        id=uuid4(), project_id=proj_id, organization_id=org_id,
+        source_type=DocumentType.ORDER, raw_sku="B24BP", normalized_sku="B24BP", quantity=2,
+    )
+    groups = matcher.match_items([d_fp, d_el], [o], [], proj_id, org_id)
+    matched = [g for g in groups if g.design_item_id is not None and g.order_item_id is not None]
+    missing = [g for g in groups if g.status == MatchGroupStatus.MISSING]
+    assert len(matched) == 1
+    assert len(missing) == 0

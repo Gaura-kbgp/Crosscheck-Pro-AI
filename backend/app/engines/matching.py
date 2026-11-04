@@ -85,12 +85,49 @@ class CanonicalMatchingUnit:
                 self.substitution_sku = item.substitution_sku
 
 
+_VIEW_TYPE_PRIORITY = {"SCHEDULE": 4, "ELEVATION": 3, "FLOORPLAN": 2, "LEGEND": 1}
+
+
+def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]:
+    """
+    Within the same display, same SKU/finish/door — keep only the highest-priority
+    view_type items (SCHEDULE > ELEVATION > FLOORPLAN > LEGEND). Items without
+    view_type pass through unchanged. This prevents FLOORPLAN+ELEVATION double-counting
+    for designs that show each display in multiple views.
+    """
+    no_vt: List[CanonicalLineItem] = []
+    vt_groups: Dict[str, List[CanonicalLineItem]] = {}
+
+    for item in items:
+        meta = item.source_metadata or {}
+        vt = meta.get("view_type")
+        if not vt:
+            no_vt.append(item)
+            continue
+        pos = meta.get("position", "") or ""
+        m = re.search(r'display\s*(\d+)', pos, re.IGNORECASE)
+        display_key = f"display_{m.group(1)}" if m else (normalize_text(pos) or "unknown")
+        norm_sku = normalize_sku(item.raw_sku or item.normalized_sku) or ""
+        # Intentionally excludes finish/door — FLOORPLAN headers often carry
+        # finish while ELEVATION rows inherit nothing; the outer aggregation
+        # handles variant splitting after dedup.
+        key = f"{norm_sku}__POS_{display_key}"
+        vt_groups.setdefault(key, []).append(item)
+
+    result = list(no_vt)
+    for group in vt_groups.values():
+        max_p = max(_VIEW_TYPE_PRIORITY.get((i.source_metadata or {}).get("view_type", ""), 0) for i in group)
+        result.extend(i for i in group if _VIEW_TYPE_PRIORITY.get((i.source_metadata or {}).get("view_type", ""), 0) == max_p)
+    return result
+
+
 def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMatchingUnit]:
     """
     Groups identical normalized SKUs within the SAME document into CanonicalMatchingUnits.
     Does NOT aggregate different variants (e.g. BT18-2-L vs BT18-2-R).
     Preserves all raw items without loss.
     """
+    items = _dedup_view_types(items)
     groups: Dict[str, List[CanonicalLineItem]] = {}
     
     for item in items:
