@@ -201,11 +201,11 @@ export default function ReviewPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Link
-            href={`/projects/${projectId}/crosscheck`}
+            href={`/projects/${projectId}`}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#58708F] hover:text-[#0F2747] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/30 rounded-md py-1 px-1.5 -ml-1.5"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to Cross-Check Matrix</span>
+            <span>Back to Project</span>
           </Link>
           <h1 className="mt-2 text-xl sm:text-2xl font-bold text-[#0F2747] tracking-tight flex items-center gap-2">
             Human Review
