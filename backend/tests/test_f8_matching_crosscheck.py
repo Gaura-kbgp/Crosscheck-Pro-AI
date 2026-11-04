@@ -4,7 +4,7 @@ from app.models.core import CanonicalLineItem, DocumentType, MatchGroupStatus, S
 from app.engines.matching import MatchingEngine
 from app.engines.crosscheck import CrossCheckEngine
 
-def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=None, door_style=None):
+def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=None, door_style=None, notes=None, finish_status=None):
     return CanonicalLineItem(
         id=uuid4(),
         project_id=uuid4(),
@@ -16,7 +16,9 @@ def make_item(source_type, sku, qty=1, dimensions=None, finish=None, sub_sku=Non
         dimensions=dimensions,
         finish=finish,
         substitution_sku=sub_sku,
-        door_style=door_style
+        door_style=door_style,
+        notes=notes,
+        finish_status=finish_status,
     )
 
 def test_exact_3way_matching():
@@ -129,6 +131,27 @@ def test_design_item_from_unrelated_display_is_out_of_scope_not_missing():
     crosscheck = CrossCheckEngine()
     discs = crosscheck.evaluate(groups, proj_id, org_id)
     assert not any(disc.match_group_id == unrelated_group.id for disc in discs)
+
+def test_observed_finish_wins_disambiguation_tie_over_inherited():
+    # Two order candidates share the same word-overlap score against the
+    # design reference (both mention "Dune"), which would otherwise abstain
+    # to UNCERTAIN as a tie. An OBSERVED finish (printed on that order row
+    # itself) is stronger evidence than one only INHERITED_EXPLICIT from a
+    # section header, so it must win the tie rather than leaving both
+    # candidates unresolved.
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+
+    d = make_item(DocumentType.DESIGN, "TUKT", 1, notes="Doorstyle changed to Dune — not shown")
+    o_observed = make_item(DocumentType.ORDER, "TUKT", 1, finish="Winston Captiv8 Dune", finish_status="OBSERVED")
+    o_inherited = make_item(DocumentType.ORDER, "TUKT", 1, finish="Winston Captiv8 Dune", finish_status="INHERITED_EXPLICIT")
+
+    groups = matcher.match_items([d], [o_observed, o_inherited], [], proj_id, org_id)
+
+    matched_group = next(g for g in groups if g.design_item_id == d.id)
+    assert matched_group.order_item_id == o_observed.id
+    assert matched_group.status == MatchGroupStatus.MATCHED
 
 def test_safe_introduced_at_with_unspecified_design_dimension():
     proj_id = uuid4()
