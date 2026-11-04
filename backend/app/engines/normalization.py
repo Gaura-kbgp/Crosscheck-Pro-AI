@@ -484,3 +484,61 @@ def normalize_text(val: Optional[str]) -> Optional[str]:
         return None
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned.upper()
+
+
+# Canonical aliases for cabinet spec fields (construction / species / drawer_box).
+# Maps every known abbreviation or variant to a single canonical form so that
+# "PLY" and "PLYWOOD" compare equal, "FB" and "FURNITURE BOARD" compare equal, etc.
+# Keys are uppercase; values are the canonical uppercase form.
+_SPEC_ALIASES: Dict[str, str] = {
+    # Construction
+    "PLY": "PLYWOOD",
+    "PLYWOOD": "PLYWOOD",
+    "FB": "FURNITURE BOARD",
+    "FURNITURE BOARD": "FURNITURE BOARD",
+    "FURNITUREBOARD": "FURNITURE BOARD",
+    "SOLID": "SOLID WOOD",
+    "SOLID WOOD": "SOLID WOOD",
+    "MDF": "MDF",
+    "PARTICLE BOARD": "PARTICLE BOARD",
+    "PARTICLEBOARD": "PARTICLE BOARD",
+    # Species
+    "QS OAK": "QUARTER SAWN OAK",
+    "QS-OAK": "QUARTER SAWN OAK",
+    "QSOAK": "QUARTER SAWN OAK",
+    "QUARTER SAWN OAK": "QUARTER SAWN OAK",
+    "QUARTERSAWN OAK": "QUARTER SAWN OAK",
+    "MAPLE": "MAPLE",
+    "HARD MAPLE": "MAPLE",
+    "CHERRY": "CHERRY",
+    "BIRCH": "BIRCH",
+    "OAK": "OAK",
+    "HICKORY": "HICKORY",
+    "ALDER": "ALDER",
+    "PINE": "PINE",
+    # Drawer box
+    "DOVETAIL": "DOVETAIL",
+    "DT": "DOVETAIL",
+    "DOWEL": "DOWEL",
+    "SOFT CLOSE": "SOFT-CLOSE",
+    "SOFT-CLOSE": "SOFT-CLOSE",
+    "SOFTCLOSE": "SOFT-CLOSE",
+    "SC": "SOFT-CLOSE",
+    "UNDERMOUNT": "UNDERMOUNT",
+    "SIDE MOUNT": "SIDE MOUNT",
+    "SIDEMOUNT": "SIDE MOUNT",
+    "BLUM": "BLUM",
+}
+
+
+def normalize_cabinet_spec(val: Optional[str]) -> Optional[str]:
+    """
+    Normalizes construction / species / drawer_box values via alias table so
+    common abbreviations ("PLY", "QS-OAK", "FB") compare equal to their full
+    canonical forms ("PLYWOOD", "QUARTER SAWN OAK", "FURNITURE BOARD").
+    Falls back to normalize_text for values not in the alias table.
+    """
+    base = normalize_text(val)
+    if base is None:
+        return None
+    return _SPEC_ALIASES.get(base, base)

@@ -8,6 +8,7 @@ from app.engines.normalization import (
     parse_and_normalize_dimensions,
     are_dimensions_equivalent,
     normalize_text,
+    normalize_cabinet_spec,
     are_skus_equivalent
 )
 
@@ -377,7 +378,7 @@ class CrossCheckEngine:
                 return None
             meta = getattr(item, "source_metadata", None) or {}
             val = meta.get(key)
-            return normalize_text(str(val)) if val else None
+            return normalize_cabinet_spec(str(val)) if val else None
 
         for spec_field, label in (("species", "Species"), ("construction", "Construction"), ("drawer_box", "Drawer box")):
             d_val = _meta(mg.design_item, spec_field)
