@@ -49,12 +49,15 @@ export default function ReviewPage() {
 
   const [selectedDiscrepancyId, setSelectedDiscrepancyId] = useState<string | null>(null);
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
-  const [isAcceptingAndDownloading, setIsAcceptingAndDownloading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  const handleAcceptAllAndDownload = async () => {
-    setIsAcceptingAndDownloading(true);
+  // Plain download — no hidden side effect. The combined "accept all, then
+  // download" button silently bulk-accepted findings before downloading,
+  // which is surprising if someone just wants to see the current report;
+  // bulk-accepting is its own explicit action (handleBulkAccept) below.
+  const handleDownloadReport = async () => {
+    setIsDownloading(true);
     try {
-      await bulkAcceptMutation.mutateAsync(undefined);
       const pdfUrl = reportsApi.downloadPdfUrl(projectId);
       const token = getStoredAuthToken();
       const res = await fetch(pdfUrl, {
@@ -74,7 +77,7 @@ export default function ReviewPage() {
     } catch (err: any) {
       toast.error(err.message || "Failed to download report");
     } finally {
-      setIsAcceptingAndDownloading(false);
+      setIsDownloading(false);
     }
   };
 
@@ -221,24 +224,12 @@ export default function ReviewPage() {
         </div>
 
         {canManage && !isFinalized && (
+          // Finalize is the actual next gate in the project's lifecycle
+          // (matches the stepper on the Project page: Review Findings ->
+          // Finalize -> Report) so it's the one primary button and leads;
+          // bulk-accept and report download are secondary utilities, each
+          // doing exactly what its label says — no hidden side effects.
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="bg-[#0284C7] hover:bg-[#0369A1] text-white font-semibold shadow-xs"
-              onClick={handleAcceptAllAndDownload}
-              isLoading={isAcceptingAndDownloading}
-              leftIcon={<Download className="h-4 w-4" />}
-            >
-              Accept All & Download Report
-            </Button>
-            <Button
-              variant="outline"
-              className="border-[#DCE6F0] text-[#0F2747] font-semibold"
-              onClick={handleBulkAccept}
-              isLoading={bulkAcceptMutation.isPending}
-              leftIcon={<CheckCheck className="h-4 w-4" />}
-            >
-              Accept All Non-Critical
-            </Button>
             <Button
               className={openCriticalCount > 0
                 ? "bg-slate-100 hover:bg-slate-200 text-slate-500 font-semibold shadow-xs"
@@ -253,6 +244,24 @@ export default function ReviewPage() {
                   {openCriticalCount}
                 </span>
               )}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-[#DCE6F0] text-[#0F2747] font-semibold"
+              onClick={handleBulkAccept}
+              isLoading={bulkAcceptMutation.isPending}
+              leftIcon={<CheckCheck className="h-4 w-4" />}
+            >
+              Accept All Non-Critical
+            </Button>
+            <Button
+              variant="outline"
+              className="border-[#DCE6F0] text-[#0F2747] font-semibold"
+              onClick={handleDownloadReport}
+              isLoading={isDownloading}
+              leftIcon={<Download className="h-4 w-4" />}
+            >
+              Download Report
             </Button>
           </div>
         )}
