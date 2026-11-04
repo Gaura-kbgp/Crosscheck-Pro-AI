@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MatchGroup, Discrepancy } from "@/lib/api/types";
+import { MatchGroup, Discrepancy, CanonicalItemRef } from "@/lib/api/types";
 import { X, AlertCircle, ArrowRight, CheckCircle2, XCircle, FileCheck2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { formatDisplayValue } from "@/lib/utils/formatters";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { reviewApi } from "@/lib/api/endpoints";
+import { EvidenceSource } from "@/components/review/evidence-source";
 
 interface MatchGroupDetailDrawerProps {
   group: MatchGroup | null;
@@ -129,6 +130,7 @@ export function MatchGroupDetailDrawer({ group, isOpen, onClose }: MatchGroupDet
                   <DiscrepancyCard
                     key={d.id}
                     discrepancy={d}
+                    group={group}
                     isProcessing={processingId === d.id}
                     onAction={(action) => reviewMutation.mutate({ discrepancyId: d.id, action })}
                   />
@@ -154,10 +156,12 @@ export function MatchGroupDetailDrawer({ group, isOpen, onClose }: MatchGroupDet
 
 function DiscrepancyCard({
   discrepancy,
+  group,
   isProcessing,
   onAction,
 }: {
   discrepancy: Discrepancy;
+  group: MatchGroup;
   isProcessing: boolean;
   onAction: (action: string) => void;
 }) {
@@ -205,11 +209,11 @@ function DiscrepancyCard({
 
       <div className="px-4 pb-2 overflow-x-auto">
         <div className="flex items-start gap-3 min-w-max">
-          <ValueBlock label="Design" value={discrepancy.design_value} />
+          <ValueBlock label="Design" value={discrepancy.design_value} projectId={group.project_id} item={group.design_item} />
           <ArrowRight className="h-4 w-4 text-slate-300 mt-5 shrink-0" />
-          <ValueBlock label="Order" value={discrepancy.order_value} />
+          <ValueBlock label="Order" value={discrepancy.order_value} projectId={group.project_id} item={group.order_item} />
           <ArrowRight className="h-4 w-4 text-slate-300 mt-5 shrink-0" />
-          <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} />
+          <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={group.project_id} item={group.ack_item} />
         </div>
       </div>
 
@@ -249,7 +253,17 @@ function DiscrepancyCard({
   );
 }
 
-function ValueBlock({ label, value }: { label: string; value: any }) {
+function ValueBlock({
+  label,
+  value,
+  projectId,
+  item,
+}: {
+  label: string;
+  value: any;
+  projectId: string;
+  item?: CanonicalItemRef | null;
+}) {
   const formatted = formatDisplayValue(value);
   const isMissing = formatted === "—" || formatted === "Missing" || formatted === "MISSING";
   return (
@@ -261,6 +275,7 @@ function ValueBlock({ label, value }: { label: string; value: any }) {
       )}>
         {formatted}
       </div>
+      <EvidenceSource projectId={projectId} documentId={item?.document_id} evidence={item?.source_metadata?.evidence} />
     </div>
   );
 }

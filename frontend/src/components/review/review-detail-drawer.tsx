@@ -8,6 +8,7 @@ import { useReviewAction } from "@/lib/hooks/use-reviews";
 import { toast } from "sonner";
 import { ReviewHistory } from "./review-history";
 import { OverrideDataForm } from "./override-data-form";
+import { EvidenceSource } from "./evidence-source";
 import { formatDisplayValue } from "@/lib/utils/formatters";
 
 interface ReviewDetailDrawerProps {
@@ -148,11 +149,11 @@ export function ReviewDetailDrawer({
               {/* 3-way Comparison */}
               <div className="p-5 overflow-x-auto">
                 <div className="flex items-start gap-4 min-w-max">
-                  <ValueBlock label="Design" value={discrepancy.design_value} evidence={group.design_item?.source_metadata?.evidence} cabinetClassification={group.design_item?.cabinet_classification} />
+                  <ValueBlock label="Design" value={discrepancy.design_value} projectId={projectId} documentId={group.design_item?.document_id} evidence={group.design_item?.source_metadata?.evidence} cabinetClassification={group.design_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
-                  <ValueBlock label="Order" value={discrepancy.order_value} evidence={group.order_item?.source_metadata?.evidence} cabinetClassification={group.order_item?.cabinet_classification} />
+                  <ValueBlock label="Order" value={discrepancy.order_value} projectId={projectId} documentId={group.order_item?.document_id} evidence={group.order_item?.source_metadata?.evidence} cabinetClassification={group.order_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
-                  <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
+                  <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={projectId} documentId={group.ack_item?.document_id} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
                 </div>
               </div>
 
@@ -274,7 +275,7 @@ export function ReviewDetailDrawer({
   );
 }
 
-function ValueBlock({ label, value, evidence, cabinetClassification }: { label: string; value: string | null | undefined; evidence?: SourceEvidence | null; cabinetClassification?: CabinetClassification | null }) {
+function ValueBlock({ label, value, projectId, documentId, evidence, cabinetClassification }: { label: string; value: string | null | undefined; projectId: string; documentId?: string | null; evidence?: SourceEvidence | null; cabinetClassification?: CabinetClassification | null }) {
   const displayVal = formatDisplayValue(value);
   const isMissing = displayVal === "—" || displayVal === "" || !value || value === "null";
   return (
@@ -295,11 +296,11 @@ function ValueBlock({ label, value, evidence, cabinetClassification }: { label: 
             "mt-1 text-[10px] font-medium truncate",
             evidence.status === "VERIFIED" ? "text-emerald-600" : "text-amber-600"
           )}
-          title={evidence.source_text || undefined}
         >
-          {evidence.page_number ? `Page ${evidence.page_number}` : "Source"} · {evidence.status === "VERIFIED" ? "verified" : "unverified"}
+          {evidence.status === "VERIFIED" ? "verified" : "unverified"}
         </div>
       )}
+      <EvidenceSource projectId={projectId} documentId={documentId} evidence={evidence} />
       {/* F8.3 Phase 3: explicit OCR vs Vision conflict — both raw readings shown, never silently picked. */}
       {evidence?.verification?.conflicts && evidence.verification.conflicts.length > 0 && (
         <div className="mt-1.5 rounded border border-amber-200 bg-amber-50 p-1.5 text-[10px] text-amber-800 space-y-0.5">

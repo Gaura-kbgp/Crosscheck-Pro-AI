@@ -28,9 +28,9 @@ export function useCrossCheck(projectId: string | undefined) {
         // F8.3 Phase 2: pass through only what Human Review needs for source
         // traceability (raw_sku + the evidence block) — not the full canonical
         // item record.
-        design_item: mg.design_item ? { raw_sku: mg.design_item.raw_sku, source_metadata: mg.design_item.source_metadata } : null,
-        order_item: mg.order_item ? { raw_sku: mg.order_item.raw_sku, source_metadata: mg.order_item.source_metadata } : null,
-        ack_item: mg.ack_item ? { raw_sku: mg.ack_item.raw_sku, source_metadata: mg.ack_item.source_metadata } : null,
+        design_item: mg.design_item ? { raw_sku: mg.design_item.raw_sku, document_id: mg.design_item.document_id, source_metadata: mg.design_item.source_metadata } : null,
+        order_item: mg.order_item ? { raw_sku: mg.order_item.raw_sku, document_id: mg.order_item.document_id, source_metadata: mg.order_item.source_metadata } : null,
+        ack_item: mg.ack_item ? { raw_sku: mg.ack_item.raw_sku, document_id: mg.ack_item.document_id, source_metadata: mg.ack_item.source_metadata } : null,
         // design_value / order_value / ack_value / field_name / severity / introduced_at
         // are all computed server-side (DiscrepancyResponse + CrossCheckEngine) from the
         // same source_values record, so every consumer of this hook renders identical state —

@@ -398,6 +398,7 @@ export interface CabinetClassification {
 
 export interface CanonicalItemRef {
   raw_sku?: string | null;
+  document_id?: string | null;
   source_metadata?: { evidence?: SourceEvidence } | null;
   cabinet_classification?: CabinetClassification | null;
 }
