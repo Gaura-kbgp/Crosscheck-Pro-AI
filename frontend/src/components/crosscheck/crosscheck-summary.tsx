@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { CrossCheckResult } from "@/lib/api/types";
 import {
   CheckCircle2,
@@ -8,18 +9,22 @@ import {
   FilePlus,
   AlertOctagon,
   Ban,
+  ArrowRight,
 } from "lucide-react";
 
 interface CrossCheckSummaryProps {
   summary: CrossCheckResult["summary"];
   selectedFilter?: string | null;
   onSelectFilter?: (status: string | null) => void;
+  /** Links the "Attention Required" CTA straight to where findings get resolved. */
+  projectId?: string;
 }
 
 export function CrossCheckSummary({
   summary,
   selectedFilter,
   onSelectFilter,
+  projectId,
 }: CrossCheckSummaryProps) {
   const stats = [
     {
@@ -86,6 +91,11 @@ export function CrossCheckSummary({
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-[#58708F]">
+        Each card below is one item's comparison across Design, Purchase Order &amp; Acknowledgement.
+        Click a card above to filter, or a row below to see its full evidence. To accept, reject, or
+        override a finding, use <span className="font-semibold text-[#0F2747]">Human Review</span>.
+      </p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((stat) => {
           const isSelected = selectedFilter === stat.key;
@@ -129,6 +139,15 @@ export function CrossCheckSummary({
             <span className="font-bold">{summary.critical_discrepancies}</span> critical discrepancies and{" "}
             <span className="font-bold">{summary.open_reviews}</span> open reviews that need your attention.
           </div>
+          {projectId && (
+            <Link
+              href={`/projects/${projectId}/review`}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors"
+            >
+              Go to Human Review
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
         </div>
       )}
     </div>

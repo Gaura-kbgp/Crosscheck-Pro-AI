@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { useProject } from "@/lib/hooks/use-projects";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -65,26 +65,39 @@ export default function CrossCheckPage() {
 
   return (
     <div className="space-y-6 pb-12 relative">
-      <div>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <Link
+            href={`/projects/${projectId}`}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#58708F] hover:text-[#0F2747] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/30 rounded-md py-1 px-1.5 -ml-1.5"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Project</span>
+          </Link>
+          <h1 className="mt-2 text-xl sm:text-2xl font-bold text-[#0F2747] tracking-tight">
+            Cross-Check Results
+          </h1>
+          <p className="text-sm text-[#58708F]">
+            Project: {project.name}
+          </p>
+        </div>
+        {/* This matrix is read-only evidence. Accepting, rejecting, or
+            overriding a finding always happens in Human Review — this is
+            the one place a first-time user needs pointed to next. */}
         <Link
-          href={`/projects/${projectId}`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#58708F] hover:text-[#0F2747] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0EA5E9]/30 rounded-md py-1 px-1.5 -ml-1.5"
+          href={`/projects/${projectId}/review`}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[#0F2747] hover:bg-[#1A3A5C] text-white transition-colors shrink-0"
         >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Project</span>
+          Next: Review &amp; Resolve Findings
+          <ArrowRight className="h-4 w-4" />
         </Link>
-        <h1 className="mt-2 text-xl sm:text-2xl font-bold text-[#0F2747] tracking-tight">
-          Cross-Check Results
-        </h1>
-        <p className="text-sm text-[#58708F]">
-          Project: {project.name}
-        </p>
       </div>
 
       <CrossCheckSummary
         summary={crosscheck.summary}
         selectedFilter={selectedFilter}
         onSelectFilter={setSelectedFilter}
+        projectId={projectId}
       />
 
       <CrossCheckList
