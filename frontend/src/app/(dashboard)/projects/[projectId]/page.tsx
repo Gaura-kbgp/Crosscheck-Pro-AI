@@ -86,6 +86,7 @@ export default function ProjectDetailPage() {
   const isAllUploaded = Boolean(designDoc && orderDoc && ackDoc);
   const isProcessing =
     processMutation.isPending ||
+    (Boolean(activeJobId) && !jobStatusData) || // waiting for first poll after POST returns
     (Boolean(jobStatusData) &&
       jobStatusData?.status !== "COMPLETED" &&
       jobStatusData?.status !== "FAILED") ||
