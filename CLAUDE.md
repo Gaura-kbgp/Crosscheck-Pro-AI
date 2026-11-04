@@ -142,6 +142,16 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
+### 2026-11-04 (session 4 — Extraction Accuracy + UI Polish)
+- **Cross-Check Matrix drawer → centered card** (`match-group-detail-drawer.tsx`): same `items-center justify-center` backdrop + `max-h-[90vh] rounded-xl zoom-in-95` card as Human Review drawer.
+- **Extraction accuracy overhaul** (`EXTRACTION_VERSION f8.3.4`):
+  - New fields: `species`, `construction`, `drawer_box` added to all 3 extraction schemas + all 3 AI prompts (with display-header inheritance rules matching finish/door_style). CrossCheckEngine section 6 compares them 3-way (WARNING severity).
+  - `view_type` (FLOORPLAN | ELEVATION | SCHEDULE | LEGEND) added to DESIGN schema + prompt; Vision prompt explicitly instructs no double-counting of floorplan/elevation instances.
+  - New `design_vision_v1.py`: dedicated Vision-pass prompt for DESIGN docs — display-by-display awareness, view_type classification, no-double-count rule, 200 DPI (up from 150).
+  - All new fields flow through `source_metadata` on `CanonicalLineItem` (no DB migration needed).
+  - Display-scoped aggregation **reverted**: position is preserved in `source_metadata` for future display-scoped matching but NOT used in group key (would cause false MISSING findings since ORDER has no display context).
+- **Known gap — display-scoped matching (Phase 3)**: Same SKU in Display 1 + Display 3 sometimes shows as false MISSING because DESIGN aggregates 2 units but ORDER has 1. Fix requires matching engine rewrite (deferred per user review).
+
 ### 2026-11-03 (session 3 — Build 3)
 - **"Accept All & Download Report" button** (`review/page.tsx`): single blue CTA that bulk-accepts all non-critical discrepancies and immediately downloads the PDF report in one click. Reuses `bulkAcceptMutation` + `reportsApi.downloadPdfUrl` + `getStoredAuthToken`. No new dependencies.
 
