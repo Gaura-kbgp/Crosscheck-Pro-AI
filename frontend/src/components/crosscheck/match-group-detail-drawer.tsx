@@ -60,13 +60,13 @@ export function MatchGroupDetailDrawer({ group, isOpen, onClose }: MatchGroupDet
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs transition-opacity"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-xs transition-opacity"
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
     >
       <div
-        className="w-full max-w-2xl bg-[#F7F9FC] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 border-l border-[#DCE6F0]"
+        className="w-full max-w-2xl max-h-[90vh] bg-[#F7F9FC] rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 fade-in duration-200 border border-[#DCE6F0]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#DCE6F0] bg-white">
