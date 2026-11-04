@@ -420,33 +420,43 @@ class ReportService:
         GREEN_BG   = colors.HexColor("#F0FDF4"); ORANGE_BG = colors.HexColor("#FFF7ED")
         RED_BG     = colors.HexColor("#FEF2F2"); BLUE_BG   = colors.HexColor("#EFF6FF")
         AMBER_BG   = colors.HexColor("#FFFBEB"); WHITE     = colors.white
+        NAVY       = colors.HexColor("#1E3A5F"); ROW_ALT   = colors.HexColor("#F3F6F9")
 
         def _ps(name, **kw):
             return ParagraphStyle(name, parent=kw.pop("parent", styles["Normal"]), **kw)
-        body      = _ps("body",   fontName="Helvetica",       fontSize=8.5, leading=11, textColor=SLATE_700)
+        body      = _ps("body",   fontName="Helvetica",       fontSize=8.5, leading=12, textColor=SLATE_700)
         small     = _ps("small",  fontName="Helvetica",       fontSize=7.5, leading=10, textColor=SLATE_700)
         small_b   = _ps("smallb", fontName="Helvetica-Bold",  fontSize=7.5, leading=10, textColor=SLATE_900)
         italic_s  = _ps("italic", fontName="Helvetica-Oblique", fontSize=8.5, leading=11, textColor=GREY)
         th_s      = _ps("th",     fontName="Helvetica-Bold",  fontSize=8,   leading=10, textColor=WHITE)
-        kpi_num_s = _ps("kpin",   fontName="Helvetica-Bold",  fontSize=20,  leading=24, alignment=1)
+        kpi_num_s = _ps("kpin",   fontName="Helvetica-Bold",  fontSize=22,  leading=26, alignment=1)
         kpi_lbl_s = _ps("kpil",   fontName="Helvetica",       fontSize=7,   leading=9,  alignment=1, textColor=GREY)
-        title_lg  = _ps("titlel", fontName="Helvetica-Bold",  fontSize=22,  leading=26, textColor=SLATE_900)
+        title_lg  = _ps("titlel", fontName="Helvetica-Bold",  fontSize=22,  leading=26, textColor=NAVY)
         title_sm  = _ps("titles", fontName="Helvetica-Bold",  fontSize=14,  leading=18, textColor=SLATE_900)
         subtitle  = _ps("sub",    fontName="Helvetica",       fontSize=9,   leading=12, textColor=GREY)
 
         def sec_hdr(text, col):
-            p = Paragraph(f"<b>{text}</b>", _ps(f"sh{text[:6].replace(' ','')}", fontName="Helvetica-Bold", fontSize=13, leading=17, textColor=col, spaceBefore=14, spaceAfter=4))
-            return [p, HRFlowable(width="100%", thickness=1.5, color=col, spaceBefore=0, spaceAfter=6)]
+            # Left accent bar + dark navy text — cleaner than colored text
+            cell = Table([[Paragraph(f"<b>{text}</b>", _ps(f"sh{text[:6].replace(' ','')}", fontName="Helvetica-Bold", fontSize=12, leading=16, textColor=NAVY, spaceBefore=0, spaceAfter=0))]], colWidths=[530])
+            cell.setStyle(TableStyle([
+                ("LEFTPADDING",(0,0),(-1,-1),10), ("RIGHTPADDING",(0,0),(-1,-1),4),
+                ("TOPPADDING",(0,0),(-1,-1),5), ("BOTTOMPADDING",(0,0),(-1,-1),5),
+                ("LINEBEFORE",(0,0),(0,-1),4,col),
+                ("BACKGROUND",(0,0),(-1,-1),SLATE_50),
+            ]))
+            return [Spacer(1,10), cell, Spacer(1,6)]
 
-        def tbl_style(hdr_col, row_bgs, border=None):
-            bc = border or colors.HexColor("#E2E8F0")
+        def tbl_style(accent_col=None, row_bgs=None, border=None):
+            # Professional: dark navy header, subtle alternating rows — accent_col/row_bgs kept for compat
+            bc = border or colors.HexColor("#DCE6F0")
             return TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), hdr_col),
-                ("BOX", (0,0), (-1,-1), 1, bc),
-                ("INNERGRID", (0,0), (-1,-1), 0.5, bc),
+                ("BACKGROUND", (0,0), (-1,0), NAVY),
+                ("BOX", (0,0), (-1,-1), 0.75, bc),
+                ("INNERGRID", (0,0), (-1,-1), 0.4, bc),
                 ("VALIGN", (0,0), (-1,-1), "TOP"),
-                ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-                ("ROWBACKGROUNDS", (0,1), (-1,-1), row_bgs),
+                ("TOPPADDING", (0,0), (-1,-1), 4), ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+                ("LEFTPADDING", (0,0), (-1,-1), 5), ("RIGHTPADDING", (0,0), (-1,-1), 5),
+                ("ROWBACKGROUNDS", (0,1), (-1,-1), [WHITE, ROW_ALT]),
             ])
 
         els = []
@@ -468,8 +478,8 @@ class ReportService:
             b_col, b_bg, b_txt = ORANGE, ORANGE_BG, "\u25ce  REVIEW REQUIRED \u2014 Several items need to be verified."
         else:
             b_col, b_bg, b_txt = RED, RED_BG, "\u26a0  ACTION REQUIRED \u2014 Important differences found that must be resolved."
-        banner = Table([[Paragraph(b_txt, _ps("ban", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=b_col, alignment=1))]], colWidths=[540])
-        banner.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),b_bg),("BOX",(0,0),(-1,-1),1.5,b_col),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),("LEFTPADDING",(0,0),(-1,-1),12)]))
+        banner = Table([[Paragraph(b_txt, _ps("ban", fontName="Helvetica-Bold", fontSize=10, leading=13, textColor=b_col))]], colWidths=[540])
+        banner.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),b_bg),("LINEBEFORE",(0,0),(0,-1),4,b_col),("LINEBELOW",(0,-1),(-1,-1),0.5,colors.HexColor("#DCE6F0")),("LINEABOVE",(0,0),(-1,0),0.5,colors.HexColor("#DCE6F0")),("TOPPADDING",(0,0),(-1,-1),9),("BOTTOMPADDING",(0,0),(-1,-1),9),("LEFTPADDING",(0,0),(-1,-1),14)]))
         els.append(banner); els.append(Spacer(1, 10))
 
         # -- 3. EXECUTIVE SUMMARY --
@@ -484,9 +494,15 @@ class ReportService:
         kpi_cells = []
         for num, lbl, bg, col in kpi_specs:
             inner = Table([[Paragraph(f"<font color='{col.hexval()}'><b>{num}</b></font>", kpi_num_s)],[Paragraph(lbl, kpi_lbl_s)]], colWidths=[100])
-            inner.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6)]))
+            inner.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
             wrap = Table([[inner]], colWidths=[106])
-            wrap.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),bg),("BOX",(0,0),(-1,-1),1,col),("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0)]))
+            wrap.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,-1),WHITE),
+                ("BOX",(0,0),(-1,-1),0.75,colors.HexColor("#DCE6F0")),
+                ("LINEABOVE",(0,0),(-1,0),3,col),  # colored top accent bar
+                ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),
+                ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+            ]))
             kpi_cells.append(wrap)
         kpi_tbl = Table([kpi_cells], colWidths=[108]*5)
         kpi_tbl.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),1),("RIGHTPADDING",(0,0),(-1,-1),1)]))

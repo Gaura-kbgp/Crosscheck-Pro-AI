@@ -6,7 +6,7 @@ import { Project } from "@/lib/api/types";
 import { ProjectStatusBadge } from "@/components/badges/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Building, User, Play, ClipboardCheck, Table2, FileText, RotateCcw } from "lucide-react";
+import { ArrowLeft, Building, User, Play, ClipboardCheck, Table2, FileText } from "lucide-react";
 import { ProjectWorkflowStepper } from "./project-workflow-stepper";
 
 interface ProjectDetailHeaderProps {
@@ -15,7 +15,6 @@ interface ProjectDetailHeaderProps {
   isAllUploaded: boolean;
   isProcessing: boolean;
   onStartCrossCheck?: () => void;
-  onRescan?: () => void;
   canEdit?: boolean;
 }
 
@@ -25,7 +24,6 @@ export function ProjectDetailHeader({
   isAllUploaded,
   isProcessing,
   onStartCrossCheck,
-  onRescan,
 }: ProjectDetailHeaderProps) {
   return (
     <div className="space-y-4">
@@ -140,18 +138,6 @@ export function ProjectDetailHeader({
                     Reports
                   </Button>
                 </Link>
-              )}
-              {project.status !== "FINALIZED" && canProcess && (
-                <Button
-                  variant="outline"
-                  size="default"
-                  disabled={isProcessing}
-                  isLoading={isProcessing}
-                  onClick={onRescan}
-                  leftIcon={!isProcessing ? <RotateCcw className="h-4 w-4" /> : undefined}
-                >
-                  Rescan
-                </Button>
               )}
             </>
           ) : (

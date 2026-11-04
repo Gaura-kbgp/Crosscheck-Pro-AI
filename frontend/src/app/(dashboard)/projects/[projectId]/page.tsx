@@ -165,15 +165,6 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleRescan = () => {
-    const confirmed = window.confirm(
-      "Rescan will re-run AI extraction and cross-check on this project's documents. Existing discrepancy results will be replaced. Continue?"
-    );
-    if (confirmed) {
-      handleStartCrossCheck(true);
-    }
-  };
-
   // Loading skeleton
   if (isProjectLoading || isDocsLoading) {
     return (
@@ -226,7 +217,6 @@ export default function ProjectDetailPage() {
         isAllUploaded={isAllUploaded}
         isProcessing={isProcessing}
         onStartCrossCheck={() => handleStartCrossCheck()}
-        onRescan={handleRescan}
         canEdit={canManage}
       />
 
