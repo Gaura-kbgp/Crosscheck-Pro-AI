@@ -100,18 +100,10 @@ def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMa
             groups[f"UNNAMED_{item.id}"] = [item]
             continue
 
-        # For DESIGN items, also key by display/position so the same SKU
-        # in Display 1 and Display 3 stays separate (they are physically
-        # different cabinets on different walls/rooms, not duplicates).
-        pos = ""
-        if getattr(item, "source_type", None) == "DESIGN":
-            raw_pos = (item.source_metadata or {}).get("position") or ""
-            pos = normalize_text(str(raw_pos)) or ""
-
         # Create group key incorporating finish/door_style if explicitly specified to protect variant integrity
         fin = normalize_text(item.finish or "") or ""
         door = normalize_text(item.door_style or "") or ""
-        group_key = f"{norm_sku}__FIN_{fin}__DOOR_{door}__POS_{pos}"
+        group_key = f"{norm_sku}__FIN_{fin}__DOOR_{door}"
         
         if group_key not in groups:
             groups[group_key] = []
