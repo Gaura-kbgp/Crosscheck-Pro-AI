@@ -6,7 +6,7 @@ import { Project } from "@/lib/api/types";
 import { ProjectStatusBadge } from "@/components/badges/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Building, User, Play, GitCompare, FileText, RotateCcw } from "lucide-react";
+import { ArrowLeft, Building, User, Play, ClipboardCheck, Table2, FileText, RotateCcw } from "lucide-react";
 import { ProjectWorkflowStepper } from "./project-workflow-stepper";
 
 interface ProjectDetailHeaderProps {
@@ -72,56 +72,88 @@ export function ProjectDetailHeader({
           </div>
         </div>
 
-        {/* Primary CTA Area */}
+        {/* Primary CTA Area — the ONE colored button is always the
+            recommended next action for this status (matches the stepper
+            above); everything else is outline/secondary, and sits after
+            it so reading order matches priority order. */}
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED") && canProcess && (
-            <Button
-              variant="outline"
-              size="default"
-              disabled={isProcessing}
-              isLoading={isProcessing}
-              onClick={onRescan}
-              leftIcon={!isProcessing ? <RotateCcw className="h-4 w-4" /> : undefined}
-            >
-              Rescan
-            </Button>
-          )}
-
-          {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED" || project.status === "FINALIZED") && (
+          {project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED" || project.status === "FINALIZED" ? (
             <>
-              <Link href={`/projects/${project.id}/reports`}>
-                <Button
-                  variant={project.status === "FINALIZED" ? "default" : "outline"}
-                  size="default"
-                  className={project.status === "FINALIZED" ? "bg-[#16A34A] hover:bg-[#15803D] text-white" : ""}
-                  leftIcon={<FileText className="h-4 w-4" />}
-                >
-                  Reports
-                </Button>
-              </Link>
-              <Link href={`/projects/${project.id}/review`}>
-                <Button
-                  variant={project.status === "REVIEW_REQUIRED" ? "default" : "outline"}
-                  size="default"
-                  className={project.status === "REVIEW_REQUIRED" ? "bg-[#16A34A] hover:bg-[#15803D] text-white" : ""}
-                  leftIcon={<GitCompare className="h-4 w-4" />}
-                >
-                  {project.status === "FINALIZED" ? "View Review" : "Human Review"}
-                </Button>
-              </Link>
-            </>
-          )}
+              {project.status === "REVIEW_REQUIRED" && (
+                <Link href={`/projects/${project.id}/review`}>
+                  <Button
+                    variant="default"
+                    size="default"
+                    className="bg-[#16A34A] hover:bg-[#15803D] text-white"
+                    leftIcon={<ClipboardCheck className="h-4 w-4" />}
+                  >
+                    Human Review
+                  </Button>
+                </Link>
+              )}
 
-          {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED" || project.status === "FINALIZED") ? (
-            <Link href={`/projects/${project.id}/crosscheck`}>
-              <Button
-                variant={project.status === "COMPLETED" ? "default" : "outline"}
-                size="default"
-                leftIcon={<GitCompare className="h-4 w-4" />}
-              >
-                View Cross-Check Matrix
-              </Button>
-            </Link>
+              {project.status === "COMPLETED" && (
+                <Link href={`/projects/${project.id}/crosscheck`}>
+                  <Button
+                    variant="default"
+                    size="default"
+                    className="bg-[#16A34A] hover:bg-[#15803D] text-white"
+                    leftIcon={<Table2 className="h-4 w-4" />}
+                  >
+                    View Cross-Check Matrix
+                  </Button>
+                </Link>
+              )}
+
+              {project.status === "FINALIZED" && (
+                <Link href={`/projects/${project.id}/reports`}>
+                  <Button
+                    variant="default"
+                    size="default"
+                    className="bg-[#16A34A] hover:bg-[#15803D] text-white"
+                    leftIcon={<FileText className="h-4 w-4" />}
+                  >
+                    Reports
+                  </Button>
+                </Link>
+              )}
+
+              {/* Secondary / supporting actions, always outline so the one
+                  colored button above never has to compete for attention. */}
+              {project.status !== "REVIEW_REQUIRED" && (
+                <Link href={`/projects/${project.id}/review`}>
+                  <Button variant="outline" size="default" leftIcon={<ClipboardCheck className="h-4 w-4" />}>
+                    {project.status === "FINALIZED" ? "View Review" : "Human Review"}
+                  </Button>
+                </Link>
+              )}
+              {project.status !== "COMPLETED" && (
+                <Link href={`/projects/${project.id}/crosscheck`}>
+                  <Button variant="outline" size="default" leftIcon={<Table2 className="h-4 w-4" />}>
+                    View Cross-Check Matrix
+                  </Button>
+                </Link>
+              )}
+              {project.status !== "FINALIZED" && (
+                <Link href={`/projects/${project.id}/reports`}>
+                  <Button variant="outline" size="default" leftIcon={<FileText className="h-4 w-4" />}>
+                    Reports
+                  </Button>
+                </Link>
+              )}
+              {project.status !== "FINALIZED" && canProcess && (
+                <Button
+                  variant="outline"
+                  size="default"
+                  disabled={isProcessing}
+                  isLoading={isProcessing}
+                  onClick={onRescan}
+                  leftIcon={!isProcessing ? <RotateCcw className="h-4 w-4" /> : undefined}
+                >
+                  Rescan
+                </Button>
+              )}
+            </>
           ) : (
             <Button
               variant="default"
