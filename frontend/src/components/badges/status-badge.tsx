@@ -142,6 +142,13 @@ export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
           Acknowledged
         </Badge>
       );
+    case "SUPERSEDED":
+      return (
+        <Badge variant="outline" className="gap-1 text-slate-500">
+          <Lock className="h-3 w-3" />
+          Superseded
+        </Badge>
+      );
     default:
       return <Badge variant="outline">{status}</Badge>;
   }

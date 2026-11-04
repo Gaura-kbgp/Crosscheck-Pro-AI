@@ -289,13 +289,17 @@ class ReviewService:
         # Get all canonical items for this match group (since one of them changed)
         # Actually, if we change a SKU, it might belong to a different match group.
         # But for Phase 6, we recalculate this MatchGroup's discrepancies.
-        # If the SKU changes, we should ideally re-run matching for the whole project, 
+        # If the SKU changes, we should ideally re-run matching for the whole project,
         # but that's expensive. Let's just re-run crosscheck for this group if it's not SKU.
         # If it is SKU, the requirement says "Re-run matching for affected MatchGroup."
-        # For simplicity, we can delete the match group's existing discrepancies, and re-run CrossCheckEngine
-        
-        db.query(Discrepancy).filter_by(match_group_id=mg.id).delete()
-        
+        # The original AI finding must never be deleted — superseding (not
+        # deleting) preserves its full evidence (explanation, severity,
+        # source_values, confidence) for later audit, while the discrepancy
+        # list a reviewer sees now reflects the post-override state.
+        db.query(Discrepancy).filter_by(match_group_id=mg.id, status="OPEN").update(
+            {"status": "SUPERSEDED"}, synchronize_session=False
+        )
+
         engine = CrossCheckEngine()
         discrepancies = engine._evaluate_match_group(mg, mg.project_id, mg.organization_id)
         engine._determine_final_state(mg)

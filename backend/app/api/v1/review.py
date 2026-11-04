@@ -48,6 +48,8 @@ def review_discrepancy(
     elif request.action == "OVERRIDE_DATA":
         if not request.match_group_id or not request.canonical_item_id or not request.field_name:
             raise HTTPException(status_code=400, detail="Missing fields for OVERRIDE_DATA")
+        if not request.reason or not request.reason.strip():
+            raise HTTPException(status_code=400, detail="A reason is required to override data")
         res = ReviewService.override_data(
             db=db,
             match_group_id=request.match_group_id,

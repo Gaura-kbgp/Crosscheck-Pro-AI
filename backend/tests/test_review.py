@@ -270,6 +270,98 @@ def test_override_data(client: TestClient, db_session: Session, test_user: User,
     assert audit.action == "OVERRIDE_DATA"
     assert audit.new_state["quantity"] == 5
 
+def test_override_data_requires_reason(client: TestClient, db_session: Session, test_user: User, test_organization: Organization, headers: dict):
+    from app.models.core import Document
+    proj = Project(organization_id=test_organization.id, name="Test Override No Reason")
+    db_session.add(proj)
+    db_session.commit()
+
+    doc = Document(project_id=proj.id, organization_id=test_organization.id, document_type=DocumentType.DESIGN, original_filename="test.pdf", storage_path=str(uuid.uuid4()), mime_type="application/pdf", file_size=100)
+    db_session.add(doc)
+    db_session.commit()
+
+    item = CanonicalLineItem(project_id=proj.id, organization_id=test_organization.id, document_id=doc.id, source_type=DocumentType.DESIGN, quantity=3)
+    db_session.add(item)
+    db_session.commit()
+
+    mg = MatchGroup(project_id=proj.id, organization_id=test_organization.id, status=MatchGroupStatus.UNCERTAIN, design_item_id=item.id)
+    db_session.add(mg)
+    db_session.commit()
+
+    disc = Discrepancy(
+        project_id=proj.id, organization_id=test_organization.id, match_group_id=mg.id,
+        field="quantity", source_values={}, comparison_values={}, status="OPEN", severity=Severity.CRITICAL,
+    )
+    db_session.add(disc)
+    db_session.commit()
+
+    # No reason at all, and a blank/whitespace-only reason, must both be rejected
+    for bad_reason in (None, "   "):
+        response = client.post(
+            f"/api/v1/discrepancies/{disc.id}/review",
+            json={
+                "action": "OVERRIDE_DATA",
+                "reason": bad_reason,
+                "match_group_id": str(mg.id),
+                "canonical_item_id": str(item.id),
+                "field_name": "quantity",
+                "new_value": 5,
+            },
+            headers=headers
+        )
+        assert response.status_code == 400
+
+    db_session.refresh(item)
+    assert item.quantity == 3  # untouched — the rejected override never applied
+
+def test_override_data_preserves_original_discrepancy(client: TestClient, db_session: Session, test_user: User, test_organization: Organization, headers: dict):
+    from app.models.core import Document
+    proj = Project(organization_id=test_organization.id, name="Test Override Preserves History")
+    db_session.add(proj)
+    db_session.commit()
+
+    doc = Document(project_id=proj.id, organization_id=test_organization.id, document_type=DocumentType.DESIGN, original_filename="test.pdf", storage_path=str(uuid.uuid4()), mime_type="application/pdf", file_size=100)
+    db_session.add(doc)
+    db_session.commit()
+
+    item = CanonicalLineItem(project_id=proj.id, organization_id=test_organization.id, document_id=doc.id, source_type=DocumentType.DESIGN, quantity=3)
+    db_session.add(item)
+    db_session.commit()
+
+    mg = MatchGroup(project_id=proj.id, organization_id=test_organization.id, status=MatchGroupStatus.UNCERTAIN, design_item_id=item.id)
+    db_session.add(mg)
+    db_session.commit()
+
+    disc = Discrepancy(
+        project_id=proj.id, organization_id=test_organization.id, match_group_id=mg.id,
+        field="quantity", source_values={}, comparison_values={}, status="OPEN", severity=Severity.CRITICAL,
+        explanation="AI flagged a quantity mismatch",
+    )
+    db_session.add(disc)
+    db_session.commit()
+    original_disc_id = disc.id
+
+    response = client.post(
+        f"/api/v1/discrepancies/{disc.id}/review",
+        json={
+            "action": "OVERRIDE_DATA",
+            "reason": "Manufacturer confirmed revised quantity",
+            "match_group_id": str(mg.id),
+            "canonical_item_id": str(item.id),
+            "field_name": "quantity",
+            "new_value": 5,
+        },
+        headers=headers
+    )
+    assert response.status_code == 200
+
+    # The original AI finding must never be deleted — it's superseded, not gone.
+    original = db_session.query(Discrepancy).filter_by(id=original_disc_id).first()
+    assert original is not None
+    assert original.status == "SUPERSEDED"
+    assert original.field == "quantity"
+    assert original.explanation == "AI flagged a quantity mismatch"
+
 def test_finalize_project(client: TestClient, db_session: Session, test_user: User, test_organization: Organization, headers: dict):
     from app.models.core import ProjectStatus
     proj = Project(organization_id=test_organization.id, name="Test Finalize", status=ProjectStatus.COMPLETED)

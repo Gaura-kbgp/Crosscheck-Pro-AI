@@ -25,7 +25,8 @@ export type ReviewStatus =
   | "ACCEPTED"
   | "FALSE_POSITIVE"
   | "ESCALATED"
-  | "ACKNOWLEDGED";
+  | "ACKNOWLEDGED"
+  | "SUPERSEDED";
 
 export type Severity = "CRITICAL" | "HIGH" | "WARNING" | "INFO";
 
