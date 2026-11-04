@@ -72,6 +72,15 @@ export default function ProjectDetailPage() {
     }
   }, [activeJobId, latestJobData]);
 
+  // Refresh project + docs when job reaches a terminal state so the
+  // header badge and button update from "Processing" to the final status.
+  useEffect(() => {
+    if (jobStatusData?.status === "COMPLETED" || jobStatusData?.status === "FAILED") {
+      refetchProject();
+      refetchDocs();
+    }
+  }, [jobStatusData?.status]);
+
   // Uploading state per document type
   const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
