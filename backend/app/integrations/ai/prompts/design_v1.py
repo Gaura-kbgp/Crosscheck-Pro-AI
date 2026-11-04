@@ -46,6 +46,10 @@ CRITICAL EXTRACTION RULES:
      finish/door style, use that item-level value instead for that item only. Only leave finish/
      door_style null when the document truly gives no finish/door style at all for that display —
      never fabricate a value that isn't printed anywhere on the page(s) for that display.
+   - finish_status / door_style_status: Whenever you fill `finish` (or `door_style`), also report HOW
+     you got that value — "OBSERVED" if it was printed directly on/next to this specific item's own
+     row, or "INHERITED_EXPLICIT" if you carried it down from the display/elevation header rather
+     than this row. Leave both null when `finish`/`door_style` itself is null (nothing to report).
    - modifications / accessories: Explicit modification codes, roll-outs, or special accessory callouts.
    - drawing_reference / position: Drawing number, elevation, or wall reference (e.g., "El 1", "El 2", "Island").
    - confidence: Numeric score between 0.0 and 1.0 reflecting extraction certainty.

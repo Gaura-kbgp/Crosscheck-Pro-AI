@@ -381,18 +381,24 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                 }
                 if doc["document_type"] == "DESIGN":
                     canonical.finish = item.get("finish")
+                    canonical.finish_status = item.get("finish_status")
                     canonical.door_style = item.get("door_style")
+                    canonical.door_style_status = item.get("door_style_status")
                     canonical.modifications = item.get("modifications")
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ORDER":
                     canonical.finish = item.get("finish")
+                    canonical.finish_status = item.get("finish_status")
                     canonical.door_style = item.get("door_style")
+                    canonical.door_style_status = item.get("door_style_status")
                     canonical.modifications = item.get("modifications")
                     source_meta["line_number"] = item.get("line_number")
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ACKNOWLEDGEMENT":
                     canonical.finish = item.get("finish")
+                    canonical.finish_status = item.get("finish_status")
                     canonical.door_style = item.get("door_style")
+                    canonical.door_style_status = item.get("door_style_status")
                     canonical.acknowledgement_status = item.get("ack_status")
                     canonical.substitution_sku = item.get("substitution_sku")
                     canonical.rejection_reason = item.get("rejection_reason")

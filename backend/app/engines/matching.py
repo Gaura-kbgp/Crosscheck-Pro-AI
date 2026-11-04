@@ -61,7 +61,9 @@ class CanonicalMatchingUnit:
         self.description = self.primary_item.description
         self.dimensions = self.primary_item.dimensions
         self.finish = self.primary_item.finish
+        self.finish_status = getattr(self.primary_item, "finish_status", None)
         self.door_style = self.primary_item.door_style
+        self.door_style_status = getattr(self.primary_item, "door_style_status", None)
         self.modifications = self.primary_item.modifications
         self.notes = getattr(self.primary_item, "notes", None)
         self.substitution_sku = getattr(self.primary_item, "substitution_sku", None)
@@ -73,8 +75,10 @@ class CanonicalMatchingUnit:
                 self.dimensions = item.dimensions
             if not self.finish and item.finish:
                 self.finish = item.finish
+                self.finish_status = getattr(item, "finish_status", None)
             if not self.door_style and item.door_style:
                 self.door_style = item.door_style
+                self.door_style_status = getattr(item, "door_style_status", None)
             if not self.notes and getattr(item, "notes", None):
                 self.notes = item.notes
             if not self.substitution_sku and getattr(item, "substitution_sku", None):
@@ -199,8 +203,16 @@ def _best_config_match(
     ref_tokens = _config_tokens(reference)
     if not ref_tokens:
         return None
-    scored = [(len(ref_tokens & _config_tokens(c)), c) for c in candidates]
-    scored = [(score, c) for score, c in scored if score > 0]
+
+    def _reliability(c: CanonicalMatchingUnit) -> int:
+        # An OBSERVED finish/door_style (printed directly on this candidate's
+        # own row) is stronger evidence than one INHERITED_EXPLICIT from a
+        # header, which breaks a tie in token overlap without guessing.
+        statuses = {getattr(c, "finish_status", None), getattr(c, "door_style_status", None)}
+        return 1 if "OBSERVED" in statuses else 0
+
+    scored = [((len(ref_tokens & _config_tokens(c)), _reliability(c)), c) for c in candidates]
+    scored = [(key, c) for key, c in scored if key[0] > 0]
     if not scored:
         return None
     scored.sort(key=lambda sc: sc[0], reverse=True)

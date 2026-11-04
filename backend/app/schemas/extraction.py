@@ -37,7 +37,9 @@ class CanonicalLineItemResponse(BaseModel):
     quantity: Optional[int] = None
     dimensions: Optional[Any] = None
     finish: Optional[str] = None
+    finish_status: Optional[str] = None
     door_style: Optional[str] = None
+    door_style_status: Optional[str] = None
     modifications: Optional[Any] = None
     price: Optional[str] = None
     notes: Optional[str] = None
@@ -62,7 +64,9 @@ class DesignExtractionItem(BaseModel):
     quantity: Optional[int] = None
     dimensions: Optional[Dict[str, Any]] = None
     finish: Optional[str] = None
+    finish_status: Optional[str] = None
     door_style: Optional[str] = None
+    door_style_status: Optional[str] = None
     color: Optional[str] = None
     modifications: Optional[List[str]] = None
     accessories: Optional[List[str]] = None
@@ -85,7 +89,9 @@ class OrderExtractionItem(BaseModel):
     quantity: Optional[int] = None
     dimensions: Optional[Dict[str, Any]] = None
     finish: Optional[str] = None
+    finish_status: Optional[str] = None
     door_style: Optional[str] = None
+    door_style_status: Optional[str] = None
     modifications: Optional[List[str]] = None
     accessories: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -105,7 +111,9 @@ class AcknowledgementExtractionItem(BaseModel):
     quantity: Optional[int] = None
     dimensions: Optional[Dict[str, Any]] = None
     finish: Optional[str] = None
+    finish_status: Optional[str] = None
     door_style: Optional[str] = None
+    door_style_status: Optional[str] = None
     price: Optional[str] = None
     ack_status: Optional[str] = None
     substitution_sku: Optional[str] = None

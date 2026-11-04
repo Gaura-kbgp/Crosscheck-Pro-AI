@@ -25,6 +25,10 @@ CRITICAL INSTRUCTIONS:
      door style, use that row-level value instead for that row only. Only leave finish/door_style
      null when the document truly gives no finish/door style at all — never fabricate a value that
      isn't printed anywhere in the document.
+   - finish_status / door_style_status: Whenever you fill `finish` (or `door_style`), also report HOW
+     you got that value — "OBSERVED" if printed directly on this row, or "INHERITED_EXPLICIT" if
+     carried down from a header rather than this row. Leave both null when `finish`/`door_style`
+     itself is null.
    - price: Confirmed unit or extended price.
    - ack_status: Acknowledged status (e.g. "CONFIRMED", "SUBSTITUTED", "REJECTED", "BACKORDERED", "MODIFIED").
    

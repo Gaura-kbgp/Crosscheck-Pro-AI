@@ -20,7 +20,14 @@ CRITICAL INSTRUCTIONS:
    - description: Item description text.
    - quantity: Exact integer quantity requested.
    - dimensions: Extract dimensions if explicitly provided (e.g. {"width": 36, "height": 34.5, "depth": 24} or {"width": "12 W"}).
-   - finish / door_style: Extract finish, door style, and color specifications.
+   - finish / door_style: Extract finish, door style, and color specifications. A PO table sometimes
+     states door style/finish once in a header/title block for a whole section rather than on every
+     row — when that is the case, fill `finish`/`door_style` on every row in that section with the
+     header's value rather than leaving it null, unless a specific row explicitly overrides it.
+   - finish_status / door_style_status: Whenever you fill `finish` (or `door_style`), also report HOW
+     you got that value — "OBSERVED" if printed directly on this row, or "INHERITED_EXPLICIT" if
+     carried down from a section header rather than this row. Leave both null when
+     `finish`/`door_style` itself is null.
    - price: Line item unit price or total price.
    - line_number: Line number exactly as printed in the PO table (e.g. "5", "*47").
    - confidence: Numeric score between 0.0 and 1.0 reflecting extraction certainty.

@@ -409,7 +409,14 @@ class CanonicalLineItem(Base):
     
     dimensions = Column(JSON, nullable=True)
     finish = Column(String, nullable=True)
+    # Provenance of finish/door_style: "OBSERVED" (printed on this row) vs
+    # "INHERITED_EXPLICIT" (backfilled from a display/order header rather
+    # than this specific row) vs "CONFLICTING" (row explicitly overrides a
+    # different header value). Null means unknown provenance (legacy data,
+    # or the extractor didn't report it) — never treated as "false".
+    finish_status = Column(String, nullable=True)
     door_style = Column(String, nullable=True)
+    door_style_status = Column(String, nullable=True)
     modifications = Column(JSON, nullable=True)
     price = Column(String, nullable=True)
     notes = Column(String, nullable=True)
