@@ -157,10 +157,10 @@ export default function ProjectDetailPage() {
 
   const handleRescan = () => {
     const confirmed = window.confirm(
-      "Rescan will re-run AI extraction and cross-check on this project's documents. Existing discrepancy results will be replaced. Continue?"
+      "Rescan will re-run the cross-check on this project's documents using cached extraction. Existing discrepancy results will be replaced. Continue?"
     );
     if (confirmed) {
-      handleStartCrossCheck(true);
+      handleStartCrossCheck(false);
     }
   };
 

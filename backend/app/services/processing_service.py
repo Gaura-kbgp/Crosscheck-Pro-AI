@@ -18,17 +18,15 @@ class ProcessingService:
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Check for active job
+        # Check for active job — all non-terminal statuses
         active_job = self.db.query(ProcessingJob).filter(
             ProcessingJob.project_id == project_id,
-            ProcessingJob.status.in_([
-                ProcessingJobStatus.QUEUED,
-                ProcessingJobStatus.VALIDATING,
-                ProcessingJobStatus.EXTRACTING,
-                ProcessingJobStatus.NORMALIZING
+            ProcessingJob.status.notin_([
+                ProcessingJobStatus.COMPLETED,
+                ProcessingJobStatus.FAILED,
             ])
         ).first()
-        
+
         if active_job:
             raise HTTPException(status_code=409, detail="Active processing job already exists for this project")
 
