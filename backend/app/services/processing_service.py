@@ -54,23 +54,25 @@ class ProcessingService:
         self.db.refresh(job)
         
         # Execute pipeline
-        try:
-            from app.worker.tasks.processing import process_project_pipeline_sync
-            if background_tasks:
-                background_tasks.add_task(
-                    process_project_pipeline_sync,
-                    str(job.id),
-                    str(project_id),
-                    str(organization_id),
-                    job.correlation_id,
-                    force_reprocess
-                )
-            else:
+        import logging
+        logger = logging.getLogger(__name__)
+        from app.worker.tasks.processing import process_project_pipeline_sync
+        if background_tasks:
+            background_tasks.add_task(
+                process_project_pipeline_sync,
+                str(job.id),
+                str(project_id),
+                str(organization_id),
+                job.correlation_id,
+                force_reprocess
+            )
+        else:
+            try:
                 from app.worker.tasks.processing import process_project_pipeline
                 process_project_pipeline.delay(str(job.id), str(project_id), str(organization_id), job.correlation_id, force_reprocess)
-        except Exception:
-            # Fallback if something fails during import or dispatch
-            pass
+            except Exception as e:
+                logger.error("Celery dispatch failed, running pipeline inline: %s", e)
+                process_project_pipeline_sync(str(job.id), str(project_id), str(organization_id), job.correlation_id, force_reprocess)
             
         return ProcessingJobResponse.model_validate(job)
         
