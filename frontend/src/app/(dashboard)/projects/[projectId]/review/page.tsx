@@ -103,14 +103,22 @@ export default function ReviewPage() {
   // Flatten and filter discrepancies
   const discrepanciesWithGroup = useMemo(() => {
     if (!crosscheck) return [];
-    
-    return crosscheck.groups.flatMap(group => 
+
+    return crosscheck.groups.flatMap(group =>
       group.discrepancies.map(d => ({
         ...d,
         group
       }))
     );
   }, [crosscheck]);
+
+  // Exactly mirrors the backend's finalize check (status OPEN + severity
+  // CRITICAL) so the dialog can warn before the user clicks Confirm,
+  // instead of them finding out only from a generic error toast after.
+  const openCriticalCount = useMemo(
+    () => discrepanciesWithGroup.filter((d) => d.status === "OPEN" && d.severity === "CRITICAL").length,
+    [discrepanciesWithGroup]
+  );
 
   const filteredDiscrepancies = useMemo(() => {
     const list = discrepanciesWithGroup.filter(d => {
@@ -230,11 +238,19 @@ export default function ReviewPage() {
               Accept All Non-Critical
             </Button>
             <Button
-              className="bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold shadow-xs"
+              className={openCriticalCount > 0
+                ? "bg-slate-100 hover:bg-slate-200 text-slate-500 font-semibold shadow-xs"
+                : "bg-[#16A34A] hover:bg-[#15803D] text-white font-semibold shadow-xs"}
               onClick={() => setFinalizeDialogOpen(true)}
               leftIcon={<CheckCircle2 className="h-4 w-4" />}
+              title={openCriticalCount > 0 ? `${openCriticalCount} critical discrepancies must be resolved first` : undefined}
             >
               Finalize Project
+              {openCriticalCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                  {openCriticalCount}
+                </span>
+              )}
             </Button>
           </div>
         )}
@@ -271,10 +287,11 @@ export default function ReviewPage() {
         readOnly={!canManage || isFinalized}
       />
 
-      <FinalizeProjectDialog 
+      <FinalizeProjectDialog
         projectId={projectId}
         isOpen={finalizeDialogOpen}
         onClose={() => setFinalizeDialogOpen(false)}
+        openCriticalCount={openCriticalCount}
       />
     </div>
   );
