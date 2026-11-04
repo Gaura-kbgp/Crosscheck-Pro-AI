@@ -97,7 +97,6 @@ export default function CrossCheckPage() {
         summary={crosscheck.summary}
         selectedFilter={selectedFilter}
         onSelectFilter={setSelectedFilter}
-        projectId={projectId}
       />
 
       <CrossCheckList

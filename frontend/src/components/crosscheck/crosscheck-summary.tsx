@@ -1,5 +1,4 @@
 import React from "react";
-import Link from "next/link";
 import { CrossCheckResult } from "@/lib/api/types";
 import {
   CheckCircle2,
@@ -9,22 +8,18 @@ import {
   FilePlus,
   AlertOctagon,
   Ban,
-  ArrowRight,
 } from "lucide-react";
 
 interface CrossCheckSummaryProps {
   summary: CrossCheckResult["summary"];
   selectedFilter?: string | null;
   onSelectFilter?: (status: string | null) => void;
-  /** Links the "Attention Required" CTA straight to where findings get resolved. */
-  projectId?: string;
 }
 
 export function CrossCheckSummary({
   summary,
   selectedFilter,
   onSelectFilter,
-  projectId,
 }: CrossCheckSummaryProps) {
   const stats = [
     {
@@ -94,7 +89,8 @@ export function CrossCheckSummary({
       <p className="text-xs text-[#58708F]">
         Each card below is one item's comparison across Design, Purchase Order &amp; Acknowledgement.
         Click a card above to filter, or a row below to see its full evidence. To accept, reject, or
-        override a finding, use <span className="font-semibold text-[#0F2747]">Human Review</span>.
+        override a finding, use the{" "}
+        <span className="font-semibold text-[#0F2747]">Review &amp; Resolve Findings</span> button above.
       </p>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {stats.map((stat) => {
@@ -132,22 +128,14 @@ export function CrossCheckSummary({
       </div>
 
       {(summary.critical_discrepancies > 0 || summary.open_reviews > 0) && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-xl border border-rose-200 bg-rose-50/50">
+        <div className="flex items-start sm:items-center gap-4 p-4 rounded-xl border border-rose-200 bg-rose-50/50">
           <AlertOctagon className="h-5 w-5 text-rose-500 shrink-0" />
           <div className="text-sm text-rose-800 flex-1">
             <span className="font-semibold">Attention Required:</span> There are{" "}
             <span className="font-bold">{summary.critical_discrepancies}</span> critical discrepancies and{" "}
-            <span className="font-bold">{summary.open_reviews}</span> open reviews that need your attention.
+            <span className="font-bold">{summary.open_reviews}</span> open reviews — use the{" "}
+            <span className="font-semibold">Review &amp; Resolve Findings</span> button above to act on them.
           </div>
-          {projectId && (
-            <Link
-              href={`/projects/${projectId}/review`}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white transition-colors"
-            >
-              Go to Human Review
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          )}
         </div>
       )}
     </div>
