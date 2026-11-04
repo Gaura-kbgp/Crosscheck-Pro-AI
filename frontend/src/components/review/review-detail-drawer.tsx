@@ -32,10 +32,12 @@ export function ReviewDetailDrawer({
   readOnly = false,
 }: ReviewDetailDrawerProps) {
   const [overrideOpen, setOverrideOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<ReviewActionType | null>(null);
   const actionMutation = useReviewAction(projectId);
 
   const handleAction = React.useCallback(async (action: ReviewActionType, reason?: string) => {
     if (!discrepancy) return;
+    setPendingAction(action);
     try {
       await actionMutation.mutateAsync({
         discrepancyId: discrepancy.id,
@@ -47,6 +49,8 @@ export function ReviewDetailDrawer({
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to perform review action");
+    } finally {
+      setPendingAction(null);
     }
   }, [discrepancy, actionMutation, onNext, onClose]);
 
@@ -186,7 +190,8 @@ export function ReviewDetailDrawer({
                     variant="outline"
                     className="justify-start gap-2 h-auto py-3 text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800"
                     onClick={() => handleAction("ACCEPT_FINDING")}
-                    isLoading={actionMutation.isPending}
+                    disabled={actionMutation.isPending}
+                    isLoading={pendingAction === "ACCEPT_FINDING"}
                   >
                     <CheckCircle className="h-4 w-4" />
                     <div className="text-left">
@@ -202,7 +207,8 @@ export function ReviewDetailDrawer({
                       const reason = window.prompt("Reason for marking as false positive:");
                       if (reason !== null) handleAction("FALSE_POSITIVE", reason);
                     }}
-                    isLoading={actionMutation.isPending}
+                    disabled={actionMutation.isPending}
+                    isLoading={pendingAction === "FALSE_POSITIVE"}
                   >
                     <XCircle className="h-4 w-4" />
                     <div className="text-left">
@@ -215,7 +221,7 @@ export function ReviewDetailDrawer({
                     variant="outline" 
                     className="justify-start gap-2 h-auto py-3 text-sky-700 border-sky-200 bg-sky-50 hover:bg-sky-100 hover:text-sky-800"
                     onClick={() => setOverrideOpen(true)}
-                    isLoading={actionMutation.isPending}
+                    disabled={actionMutation.isPending}
                   >
                     <Edit3 className="h-4 w-4" />
                     <div className="text-left">
@@ -231,7 +237,8 @@ export function ReviewDetailDrawer({
                       const reason = window.prompt("Reason for acknowledging manufacturer change:");
                       if (reason !== null) handleAction("ACKNOWLEDGE_MFR_CHANGE", reason);
                     }}
-                    isLoading={actionMutation.isPending}
+                    disabled={actionMutation.isPending}
+                    isLoading={pendingAction === "ACKNOWLEDGE_MFR_CHANGE"}
                   >
                     <AlertTriangle className="h-4 w-4" />
                     <div className="text-left">
@@ -247,7 +254,8 @@ export function ReviewDetailDrawer({
                       const reason = window.prompt("Reason for escalation:");
                       if (reason !== null) handleAction("ESCALATE", reason);
                     }}
-                    isLoading={actionMutation.isPending}
+                    disabled={actionMutation.isPending}
+                    isLoading={pendingAction === "ESCALATE"}
                   >
                     <MessageSquareWarning className="h-4 w-4" />
                     <div className="text-left">
