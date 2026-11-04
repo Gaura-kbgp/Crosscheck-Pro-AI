@@ -21,10 +21,12 @@ import { ReviewList } from "@/components/review/review-list";
 import { ReviewDetailDrawer } from "@/components/review/review-detail-drawer";
 import { Discrepancy, MatchGroup } from "@/lib/api/types";
 import { FinalizeProjectDialog } from "@/components/projects/finalize-project-dialog";
+import { useRecordLastViewedProject } from "@/lib/hooks/use-last-viewed-project";
 
 export default function ReviewPage() {
   const params = useParams();
   const projectId = (params?.projectId as string) || "";
+  useRecordLastViewedProject(projectId);
 
   const { profile } = useAuthStore();
   const canManage = profile?.role === "ADMIN" || profile?.role === "REVIEWER";

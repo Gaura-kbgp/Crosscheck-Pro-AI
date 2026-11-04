@@ -11,10 +11,12 @@ import { ErrorState } from "@/components/feedback/error-state";
 import { CrossCheckSummary } from "@/components/crosscheck/crosscheck-summary";
 import { CrossCheckList } from "@/components/crosscheck/crosscheck-list";
 import { MatchGroupDetailDrawer } from "@/components/crosscheck/match-group-detail-drawer";
+import { useRecordLastViewedProject } from "@/lib/hooks/use-last-viewed-project";
 
 export default function CrossCheckPage() {
   const params = useParams();
   const projectId = (params?.projectId as string) || "";
+  useRecordLastViewedProject(projectId);
 
   const {
     data: project,

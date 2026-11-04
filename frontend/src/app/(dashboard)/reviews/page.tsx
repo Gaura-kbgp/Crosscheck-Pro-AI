@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { useProjects } from "@/lib/hooks/use-projects";
+import { getLastViewedProjectId } from "@/lib/hooks/use-last-viewed-project";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { reviewApi } from "@/lib/api/endpoints";
@@ -33,8 +34,15 @@ export default function ReviewsQueuePage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
   const [processingDiscrepancyId, setProcessingDiscrepancyId] = useState<string | null>(null);
+  const lastViewedId = useMemo(() => getLastViewedProjectId(), []);
 
-  const activeProjectId = selectedProjectId || (projects && projects.length > 0 ? projects[0].id : null);
+  // Default to the project the user was just looking at, not a surprising
+  // different one (see use-last-viewed-project.ts).
+  const lastViewedExists = !!projects?.some((p) => p.id === lastViewedId);
+  const activeProjectId =
+    selectedProjectId ||
+    (lastViewedExists ? lastViewedId : null) ||
+    (projects && projects.length > 0 ? projects[0].id : null);
   const activeProject = projects?.find((p) => p.id === activeProjectId) || null;
 
   const {

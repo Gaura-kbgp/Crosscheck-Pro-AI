@@ -14,6 +14,7 @@ import {
   useLatestJob,
 } from "@/lib/hooks/use-documents";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useRecordLastViewedProject } from "@/lib/hooks/use-last-viewed-project";
 import { ProjectDetailHeader } from "@/components/projects/project-detail-header";
 import { ProjectDocumentWorkflow } from "@/components/projects/project-document-workflow";
 import { ProjectDocumentCard } from "@/components/projects/project-document-card";
@@ -29,6 +30,7 @@ export default function ProjectDetailPage() {
 
   const { profile } = useAuthStore();
   const userRole = profile?.role || "VIEWER";
+  useRecordLastViewedProject(projectId);
   const {
     data: project,
     isLoading: isProjectLoading,

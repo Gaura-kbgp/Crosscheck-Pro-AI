@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { useProjects } from "@/lib/hooks/use-projects";
+import { getLastViewedProjectId } from "@/lib/hooks/use-last-viewed-project";
 import { useCrossCheck } from "@/lib/hooks/use-crosscheck";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/feedback/empty-state";
@@ -26,9 +27,17 @@ export default function CrossCheckHubPage() {
   const { data: projects, isLoading: isProjectsLoading } = useProjects();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const lastViewedId = useMemo(() => getLastViewedProjectId(), []);
 
-  // Default to the first processed project or first project if none selected
-  const activeProjectId = selectedProjectId || (projects && projects.length > 0 ? projects[0].id : null);
+  // Default to the project the user was just looking at (so clicking this
+  // sidebar link right after viewing a project's own page lands on the
+  // same project, not a surprising different one), then its first
+  // processed project, then just the first project.
+  const lastViewedExists = !!projects?.some((p) => p.id === lastViewedId);
+  const activeProjectId =
+    selectedProjectId ||
+    (lastViewedExists ? lastViewedId : null) ||
+    (projects && projects.length > 0 ? projects[0].id : null);
   const activeProject = projects?.find((p) => p.id === activeProjectId) || null;
 
   const {
