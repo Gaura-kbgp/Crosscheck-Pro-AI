@@ -125,7 +125,22 @@ def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]
         # header. Keeping the blank-finish instance alongside the explicit one
         # creates two aggregate groups for the same SKU → AMBIGUOUS_DUPLICATE.
         with_finish = [i for i in same_prio if (i.finish or "").strip() or (i.door_style or "").strip()]
-        result.extend(with_finish if with_finish else same_prio)
+        winners = with_finish if with_finish else same_prio
+        # Inherit finish/door_style from dropped lower-priority items when winner
+        # has none. Never delete an occurrence simply because another has a finish.
+        dropped = [i for i in group if i not in winners]
+        for w in winners:
+            if not (w.finish or "").strip():
+                for d in dropped:
+                    if (d.finish or "").strip():
+                        w.finish = d.finish
+                        break
+            if not (w.door_style or "").strip():
+                for d in dropped:
+                    if (d.door_style or "").strip():
+                        w.door_style = d.door_style
+                        break
+        result.extend(winners)
     return result
 
 

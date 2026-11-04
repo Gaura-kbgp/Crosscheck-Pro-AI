@@ -59,8 +59,8 @@ export function ProcessingStatusCard({
   const activeStage =
     STAGES.find((s) => s.key === status) || {
       key: status,
-      label: status.toLowerCase().replace(/_/g, " "),
-      description: "Processing pipeline active",
+      label: isFailed ? "Processing failed" : status.toLowerCase().replace(/_/g, " "),
+      description: isFailed ? "An error occurred — see details below" : "Processing pipeline active",
     };
 
   const rawErrorStr = typeof error === "string" ? error : JSON.stringify(error || {});
@@ -75,6 +75,7 @@ export function ProcessingStatusCard({
     rawErrorStr.includes("RESOURCE_EXHAUSTED") ||
     rawErrorStr.includes("prepayment credits") ||
     rawErrorStr.includes("429");
+  const isNoDocumentsError = rawErrorStr.toLowerCase().includes("no documents found");
 
   return (
     <div
@@ -235,7 +236,14 @@ export function ProcessingStatusCard({
       {/* Error Details */}
       {isFailed && (
         <div className="rounded-lg border border-[#FECACA] bg-white p-3.5 text-xs text-[#B91C1C] space-y-2">
-          {isGeminiQuotaError ? (
+          {isNoDocumentsError ? (
+            <div>
+              <p className="font-bold text-slate-800">No documents uploaded</p>
+              <p className="text-slate-600 mt-1 leading-relaxed">
+                This project has no documents to process. Upload a Design drawing, Purchase Order, and Manufacturer Acknowledgement above, then start the cross-check.
+              </p>
+            </div>
+          ) : isGeminiQuotaError ? (
             <div>
               <p className="font-bold text-slate-800">
                 AI Provider Switched to OpenAI GPT-4o

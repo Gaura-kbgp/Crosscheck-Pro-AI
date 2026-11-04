@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { MatchGroup } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, AlertCircle, Filter, X } from "lucide-react";
+import { ChevronRight, ChevronDown, AlertCircle, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDisplayValue } from "@/lib/utils/formatters";
 
@@ -21,6 +21,25 @@ export function CrossCheckList({
   const filteredGroups = filterStatus
     ? groups.filter((g) => g.status.toUpperCase() === filterStatus.toUpperCase())
     : groups;
+
+  // Group by canonical_sku so TUKT ×16, SM96 ×8, etc. collapse into one row
+  const skuGroups = useMemo(() => {
+    const map = new Map<string, MatchGroup[]>();
+    for (const g of filteredGroups) {
+      const sku = g.canonical_sku || "Unknown SKU";
+      if (!map.has(sku)) map.set(sku, []);
+      map.get(sku)!.push(g);
+    }
+    return Array.from(map.entries());
+  }, [filteredGroups]);
+
+  const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
+  const toggleSku = (sku: string) =>
+    setExpandedSkus((prev) => {
+      const next = new Set(prev);
+      next.has(sku) ? next.delete(sku) : next.add(sku);
+      return next;
+    });
 
   if (groups.length === 0) {
     return (
@@ -76,36 +95,126 @@ export function CrossCheckList({
           )}
         </div>
       ) : (
-        filteredGroups.map((group) => (
-          <MatchGroupCard
-            key={group.id}
-            group={group}
-            onClick={() => onSelectGroup(group.id)}
-          />
-        ))
+        skuGroups.map(([sku, grps]) => {
+          if (grps.length === 1) {
+            return (
+              <MatchGroupCard
+                key={grps[0].id}
+                group={grps[0]}
+                onClick={() => onSelectGroup(grps[0].id)}
+              />
+            );
+          }
+          const isExpanded = expandedSkus.has(sku);
+          return (
+            <div key={sku} className="rounded-xl border border-[#DCE6F0] bg-white shadow-2xs overflow-hidden">
+              <SkuGroupHeader
+                sku={sku}
+                groups={grps}
+                expanded={isExpanded}
+                onToggle={() => toggleSku(sku)}
+              />
+              {isExpanded && (
+                <div className="divide-y divide-[#F0F4F8]">
+                  {grps.map((g) => (
+                    <MatchGroupCard
+                      key={g.id}
+                      group={g}
+                      onClick={() => onSelectGroup(g.id)}
+                      nested
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
   );
 }
 
-function MatchGroupCard({ group, onClick }: { group: MatchGroup; onClick: () => void }) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "MATCHED":
-        return "bg-emerald-100 text-emerald-700 hover:bg-emerald-200";
-      case "CHANGED":
-        return "bg-amber-100 text-amber-700 hover:bg-amber-200";
-      case "MISSING":
-        return "bg-rose-100 text-rose-700 hover:bg-rose-200";
-      case "EXTRA":
-        return "bg-purple-100 text-purple-700 hover:bg-purple-200";
-      case "OUT_OF_SCOPE":
-        return "bg-sky-100 text-sky-700 hover:bg-sky-200";
-      default:
-        return "bg-slate-100 text-slate-700 hover:bg-slate-200";
-    }
-  };
+function SkuGroupHeader({
+  sku,
+  groups,
+  expanded,
+  onToggle,
+}: {
+  sku: string;
+  groups: MatchGroup[];
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const statusCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    acc[g.status] = (acc[g.status] || 0) + 1;
+    return acc;
+  }, {});
 
+  const STATUS_ORDER = ["MISSING", "EXTRA", "CHANGED", "UNCERTAIN", "OUT_OF_SCOPE", "MATCHED"];
+  const dominantStatus = STATUS_ORDER.find((s) => statusCounts[s]) || "MATCHED";
+
+  const hasCritical = groups.some((g) =>
+    g.discrepancies.some((d) => d.severity === "CRITICAL")
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        "w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-[#F7F9FC] transition-colors",
+        hasCritical && "bg-rose-50/30"
+      )}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <StatusBadge status={dominantStatus} />
+        <span className="text-base font-bold text-[#0F2747] font-mono tracking-tight truncate">
+          {sku}
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-[#58708F] bg-slate-100 px-2 py-0.5 rounded-full">
+          {groups.length} groups
+        </span>
+        <div className="hidden sm:flex items-center gap-1.5 flex-wrap">
+          {STATUS_ORDER.filter((s) => statusCounts[s]).map((s) => (
+            <span key={s} className="text-[10px] font-semibold text-[#58708F]">
+              {s} ×{statusCounts[s]}
+            </span>
+          ))}
+        </div>
+      </div>
+      {expanded ? (
+        <ChevronDown className="h-4 w-4 shrink-0 text-[#58708F]" />
+      ) : (
+        <ChevronRight className="h-4 w-4 shrink-0 text-[#58708F]" />
+      )}
+    </button>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cls = {
+    MATCHED: "bg-emerald-100 text-emerald-700",
+    CHANGED: "bg-amber-100 text-amber-700",
+    MISSING: "bg-rose-100 text-rose-700",
+    EXTRA: "bg-purple-100 text-purple-700",
+    OUT_OF_SCOPE: "bg-sky-100 text-sky-700",
+  }[status] ?? "bg-slate-100 text-slate-700";
+  return (
+    <Badge className={cn("px-2.5 py-1 text-xs font-bold shadow-none border-none shrink-0", cls)}>
+      {status}
+    </Badge>
+  );
+}
+
+function MatchGroupCard({
+  group,
+  onClick,
+  nested = false,
+}: {
+  group: MatchGroup;
+  onClick: () => void;
+  nested?: boolean;
+}) {
   const hasCritical = group.discrepancies.some((d) => d.severity === "CRITICAL");
   const openIssues = group.discrepancies.filter(
     (d) => d.status === "OPEN" || d.status === "ESCALATED"
@@ -118,19 +227,16 @@ function MatchGroupCard({ group, onClick }: { group: MatchGroup; onClick: () => 
     <div
       onClick={onClick}
       className={cn(
-        "group relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-[#DCE6F0] bg-white p-4 shadow-2xs transition-all hover:border-[#0EA5E9] hover:shadow-md cursor-pointer",
-        hasCritical && "border-rose-200 bg-rose-50/10"
+        "group relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 transition-all cursor-pointer",
+        nested
+          ? "hover:bg-[#F7F9FC]"
+          : "rounded-xl border border-[#DCE6F0] bg-white shadow-2xs hover:border-[#0EA5E9] hover:shadow-md",
+        hasCritical && !nested && "border-rose-200 bg-rose-50/10",
+        hasCritical && nested && "bg-rose-50/10"
       )}
     >
       <div className="flex items-center gap-4">
-        {/* Status Indicator */}
-        <div className="flex shrink-0 items-center justify-center">
-          <Badge className={cn("px-2.5 py-1 text-xs font-bold shadow-none border-none", getStatusColor(group.status))}>
-            {group.status}
-          </Badge>
-        </div>
-
-        {/* Main Info */}
+        <StatusBadge status={group.status} />
         <div>
           <h3 className="text-base font-bold text-[#0F2747] font-mono tracking-tight">
             {group.canonical_sku || "Unknown SKU"}

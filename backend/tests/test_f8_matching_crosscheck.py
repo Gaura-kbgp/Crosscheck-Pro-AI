@@ -228,6 +228,19 @@ def test_no_view_type_passthrough():
     assert len(result) == 1
 
 
+def test_elevation_winner_inherits_finish_from_dropped_floorplan():
+    # ELEVATION has no finish, FLOORPLAN has finish — winner (ELEVATION) must
+    # inherit finish so it reaches the aggregation step with spec data intact.
+    items = [
+        _vt_item("AFA56S", 1, "ELEVATION", "Display 6 Mudroom", finish=None),
+        _vt_item("AFA56S", 1, "FLOORPLAN", "Display 6: Mudroom", finish="LAGOON ON PAINTED OAK"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert result[0].finish == "LAGOON ON PAINTED OAK"
+    assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
+
+
 def test_floorplan_elevation_match_no_false_missing():
     # End-to-end: DESIGN has FLOORPLAN+ELEVATION for same display, ORDER has 1
     # → should match (MATCHED or MATCHED with possible qty discrepancy), NOT MISSING
