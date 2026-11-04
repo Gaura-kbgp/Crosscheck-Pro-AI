@@ -146,13 +146,15 @@ export function ReviewDetailDrawer({
                 )}
               </div>
 
-              {/* 3-way Comparison */}
-              <div className="p-5 overflow-x-auto">
-                <div className="flex items-start gap-4 min-w-max">
+              {/* 3-way Comparison — stacks vertically on narrow screens
+                  (phone/tablet) instead of forcing a horizontal scroll
+                  that cuts off the Acknowledgement column. */}
+              <div className="p-5 sm:overflow-x-auto">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 sm:min-w-max">
                   <ValueBlock label="Design" value={discrepancy.design_value} projectId={projectId} documentId={group.design_item?.document_id} evidence={group.design_item?.source_metadata?.evidence} cabinetClassification={group.design_item?.cabinet_classification} />
-                  <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-6 sm:rotate-0 sm:self-auto" />
                   <ValueBlock label="Order" value={discrepancy.order_value} projectId={projectId} documentId={group.order_item?.document_id} evidence={group.order_item?.source_metadata?.evidence} cabinetClassification={group.order_item?.cabinet_classification} />
-                  <ArrowRight className="h-4 w-4 text-slate-300 mt-6 shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-6 sm:rotate-0 sm:self-auto" />
                   <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={projectId} documentId={group.ack_item?.document_id} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
                 </div>
               </div>
@@ -279,7 +281,7 @@ function ValueBlock({ label, value, projectId, documentId, evidence, cabinetClas
   const displayVal = formatDisplayValue(value);
   const isMissing = displayVal === "—" || displayVal === "" || !value || value === "null";
   return (
-    <div className="w-36 flex-shrink-0">
+    <div className="w-full sm:w-36 shrink-0">
       <div className="text-[11px] font-bold text-[#58708F] uppercase tracking-wider mb-1.5">{label}</div>
       <div className={cn(
         "p-3 rounded-lg border text-sm font-mono break-words shadow-xs",

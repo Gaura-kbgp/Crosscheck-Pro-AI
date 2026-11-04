@@ -207,12 +207,14 @@ function DiscrepancyCard({
         </p>
       )}
 
-      <div className="px-4 pb-2 overflow-x-auto">
-        <div className="flex items-start gap-3 min-w-max">
+      {/* Stacks vertically on narrow screens instead of forcing a
+          horizontal scroll that cuts off the Acknowledgement column. */}
+      <div className="px-4 pb-2 sm:overflow-x-auto">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 sm:min-w-max">
           <ValueBlock label="Design" value={discrepancy.design_value} projectId={group.project_id} item={group.design_item} />
-          <ArrowRight className="h-4 w-4 text-slate-300 mt-5 shrink-0" />
+          <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-5 sm:rotate-0 sm:self-auto" />
           <ValueBlock label="Order" value={discrepancy.order_value} projectId={group.project_id} item={group.order_item} />
-          <ArrowRight className="h-4 w-4 text-slate-300 mt-5 shrink-0" />
+          <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-5 sm:rotate-0 sm:self-auto" />
           <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={group.project_id} item={group.ack_item} />
         </div>
       </div>
@@ -267,7 +269,7 @@ function ValueBlock({
   const formatted = formatDisplayValue(value);
   const isMissing = formatted === "—" || formatted === "Missing" || formatted === "MISSING";
   return (
-    <div className="w-36 flex-shrink-0">
+    <div className="w-full sm:w-36 shrink-0">
       <div className="text-[10px] font-bold text-[#58708F] uppercase tracking-wider mb-1">{label}</div>
       <div className={cn(
         "p-2 rounded-lg border text-xs font-semibold font-mono break-words leading-relaxed",
