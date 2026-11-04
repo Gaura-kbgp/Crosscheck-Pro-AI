@@ -11,7 +11,7 @@ const routeTitleMap: Record<string, string> = {
   "/projects": "Projects",
   "/documents": "Document Repository",
   "/crosscheck": "Three-Way CrossCheck",
-  "/reviews": "Human Review Queue",
+  "/reviews": "Human Review",
   "/reports": "Reports & Exports",
   "/organization": "Organization Settings",
   "/settings": "Settings & Preferences",
