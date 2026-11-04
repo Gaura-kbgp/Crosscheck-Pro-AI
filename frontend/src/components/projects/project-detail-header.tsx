@@ -7,6 +7,7 @@ import { ProjectStatusBadge } from "@/components/badges/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { ArrowLeft, Building, User, Play, GitCompare, FileText, RotateCcw } from "lucide-react";
+import { ProjectWorkflowStepper } from "./project-workflow-stepper";
 
 interface ProjectDetailHeaderProps {
   project: Project;
@@ -37,6 +38,11 @@ export function ProjectDetailHeader({
           <ArrowLeft className="h-4 w-4" />
           <span>Back to Projects</span>
         </Link>
+      </div>
+
+      {/* Where this project is in its lifecycle, start to finish */}
+      <div className="rounded-xl border border-[#DCE6F0] bg-white px-5 py-4 shadow-2xs">
+        <ProjectWorkflowStepper status={project.status} isAllUploaded={isAllUploaded} />
       </div>
 
       {/* Main Header Container */}
@@ -85,8 +91,9 @@ export function ProjectDetailHeader({
             <>
               <Link href={`/projects/${project.id}/reports`}>
                 <Button
-                  variant="outline"
+                  variant={project.status === "FINALIZED" ? "default" : "outline"}
                   size="default"
+                  className={project.status === "FINALIZED" ? "bg-[#16A34A] hover:bg-[#15803D] text-white" : ""}
                   leftIcon={<FileText className="h-4 w-4" />}
                 >
                   Reports
@@ -104,11 +111,11 @@ export function ProjectDetailHeader({
               </Link>
             </>
           )}
-          
+
           {(project.status === "COMPLETED" || project.status === "REVIEW_REQUIRED" || project.status === "FINALIZED") ? (
             <Link href={`/projects/${project.id}/crosscheck`}>
               <Button
-                variant={project.status === "REVIEW_REQUIRED" ? "outline" : "default"}
+                variant={project.status === "COMPLETED" ? "default" : "outline"}
                 size="default"
                 leftIcon={<GitCompare className="h-4 w-4" />}
               >
