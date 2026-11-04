@@ -348,9 +348,9 @@ class ReportService:
         return output.getvalue()
 
     # -------------------------------------------------------------
-    # 2. Production-Safe PDF Report Generation
+    # 2. Production-Safe PDF Report Generation  (customer-friendly layout)
     # -------------------------------------------------------------
-    def generate_pdf_bytes(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> bytes:
+    def generate_pdf_bytes(self, project_id: uuid.UUID, organization_id: uuid.UUID) -> bytes:  # noqa: C901
         project = self.db.scalars(
             select(Project).where(
                 Project.id == project_id,
@@ -360,512 +360,288 @@ class ReportService:
         if not project:
             raise ResourceNotFoundError(message="Project not found")
 
-        # Load all related records
-        documents = self.db.scalars(
-            select(Document).where(
-                Document.project_id == project_id,
-                Document.organization_id == organization_id
-            ).order_by(Document.created_at.asc())
-        ).all()
+        # --- load data ---
+        documents = self.db.scalars(select(Document).where(Document.project_id == project_id, Document.organization_id == organization_id).order_by(Document.created_at.asc())).all()
+        match_groups = self.db.scalars(select(MatchGroup).where(MatchGroup.project_id == project_id, MatchGroup.organization_id == organization_id).order_by(MatchGroup.created_at.asc())).all()
+        discrepancies = self.db.scalars(select(Discrepancy).where(Discrepancy.project_id == project_id, Discrepancy.organization_id == organization_id).order_by(Discrepancy.created_at.asc())).all()
 
-        match_groups = self.db.scalars(
-            select(MatchGroup).where(
-                MatchGroup.project_id == project_id,
-                MatchGroup.organization_id == organization_id
-            ).order_by(MatchGroup.created_at.asc())
-        ).all()
+        mg_disc_map: Dict[uuid.UUID, List[Discrepancy]] = {}
+        for d in discrepancies:
+            mg_disc_map.setdefault(d.match_group_id, []).append(d)
 
-        discrepancies = self.db.scalars(
-            select(Discrepancy).where(
-                Discrepancy.project_id == project_id,
-                Discrepancy.organization_id == organization_id
-            ).order_by(Discrepancy.created_at.asc())
-        ).all()
+        # --- helpers ---
+        FIELD_LABELS = {
+            "item_presence": "Item Presence", "quantity": "Quantity",
+            "finish": "Color / Finish", "door_style": "Door Style",
+            "dimensions": "Size / Dimensions", "species": "Wood Species",
+            "construction": "Box Construction", "drawer_box": "Drawer Box",
+            "sku": "Item Code", "description": "Description",
+        }
+        def _fl(f): return FIELD_LABELS.get(f, (f or "").replace("_", " ").title())
+        def _sku(mg):
+            d, o, a = mg.design_item, mg.order_item, mg.ack_item
+            return mg.final_sku or (d.normalized_sku if d else None) or (o.normalized_sku if o else None) or (a.normalized_sku if a else "N/A") or "N/A"
+        def _desc(mg):
+            d, o, a = mg.design_item, mg.order_item, mg.ack_item
+            return (d.description if d and d.description else None) or (o.description if o and o.description else None) or (a.description if a and a.description else None) or "-"
+        def _sv(d_obj):
+            sv = d_obj.source_values
+            if isinstance(sv, str):
+                try: sv = json.loads(sv)
+                except Exception: sv = {}
+            return sv if isinstance(sv, dict) else {}
 
-        reviews = self.db.scalars(
-            select(HumanReview).where(
-                HumanReview.project_id == project_id,
-                HumanReview.organization_id == organization_id
-            ).order_by(HumanReview.created_at.desc())
-        ).all()
+        def _mg_status(mg): return mg.status.value if hasattr(mg.status, "value") else str(mg.status)
 
-        audit_logs = self.db.scalars(
-            select(AuditLog).where(
-                AuditLog.project_id == project_id,
-                AuditLog.organization_id == organization_id
-            ).order_by(AuditLog.created_at.desc())
-        ).all()
+        active_mgs   = [mg for mg in match_groups if _mg_status(mg) != "OUT_OF_SCOPE"]
+        matched_mgs  = [mg for mg in active_mgs if _mg_status(mg) == "MATCHED"]
+        changed_mgs  = [mg for mg in active_mgs if _mg_status(mg) == "CHANGED"]
+        missing_mgs  = [mg for mg in active_mgs if _mg_status(mg) == "MISSING"]
+        extra_mgs    = [mg for mg in active_mgs if _mg_status(mg) == "EXTRA"]
+        uncertain_mgs= [mg for mg in active_mgs if _mg_status(mg) == "UNCERTAIN"]
 
-        # Build metrics
-        total_mg = len(match_groups)
-        matched_cnt = sum(1 for mg in match_groups if mg.status == MatchGroupStatus.MATCHED)
-        changed_cnt = sum(1 for mg in match_groups if mg.status == MatchGroupStatus.CHANGED)
-        missing_cnt = sum(1 for mg in match_groups if mg.status == MatchGroupStatus.MISSING)
-        extra_cnt = sum(1 for mg in match_groups if mg.status == MatchGroupStatus.EXTRA)
-        uncertain_cnt = sum(1 for mg in match_groups if mg.status == MatchGroupStatus.UNCERTAIN)
+        total = len(active_mgs) or 1
+        matched_pct = len(matched_mgs) / total * 100
+        has_critical = any((d.severity.value if hasattr(d.severity, "value") else str(d.severity)).upper() == "CRITICAL" for d in discrepancies)
 
-        critical_disc = sum(1 for d in discrepancies if (d.severity.value if hasattr(d.severity, 'value') else str(d.severity)) in ["Critical", "CRITICAL"])
-        warning_disc = sum(1 for d in discrepancies if (d.severity.value if hasattr(d.severity, 'value') else str(d.severity)) in ["Warning", "WARNING"])
-        info_disc = sum(1 for d in discrepancies if (d.severity.value if hasattr(d.severity, 'value') else str(d.severity)) in ["Info", "INFO"])
+        doc_by_type = {(d.document_type.name if hasattr(d.document_type, "name") else str(d.document_type)): d for d in documents}
+        design_d = doc_by_type.get("DESIGN"); order_d = doc_by_type.get("ORDER"); ack_d = doc_by_type.get("ACKNOWLEDGEMENT")
 
-        # Setup ReportLab Doc
+        # --- PDF setup ---
         buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=letter,
-            leftMargin=36,
-            rightMargin=36,
-            topMargin=46,
-            bottomMargin=54
-        )
-
+        pdf_doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=46, bottomMargin=54)
         styles = getSampleStyleSheet()
-        
-        # Color palette
-        PRIMARY = colors.HexColor("#0F172A")    # Slate 900
-        SECONDARY = colors.HexColor("#1E293B")  # Slate 800
-        ACCENT_BLUE = colors.HexColor("#2563EB")# Blue 600
-        TEXT_DARK = colors.HexColor("#334155")  # Slate 700
-        MUTED_TEXT = colors.HexColor("#64748B") # Slate 500
-        BG_LIGHT = colors.HexColor("#F8FAFC")   # Slate 50
-        BORDER_COLOR = colors.HexColor("#E2E8F0")# Slate 200
-        RED_COLOR = colors.HexColor("#DC2626")  # Red 600
-        AMBER_COLOR = colors.HexColor("#D97706")# Amber 600
-        GREEN_COLOR = colors.HexColor("#16A34A")# Green 600
 
-        # Custom Typography Styles
-        title_style = ParagraphStyle(
-            'DocTitle',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=20,
-            leading=24,
-            textColor=PRIMARY
-        )
-        subtitle_style = ParagraphStyle(
-            'DocSubtitle',
-            parent=styles['Normal'],
-            fontName='Helvetica',
-            fontSize=10,
-            leading=14,
-            textColor=MUTED_TEXT
-        )
-        h2_style = ParagraphStyle(
-            'SectionHeader',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=12,
-            leading=16,
-            textColor=PRIMARY,
-            spaceBefore=12,
-            spaceAfter=6
-        )
-        body_style = ParagraphStyle(
-            'Body',
-            parent=styles['Normal'],
-            fontName='Helvetica',
-            fontSize=8.5,
-            leading=11,
-            textColor=TEXT_DARK
-        )
-        body_bold = ParagraphStyle(
-            'BodyBold',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=8.5,
-            leading=11,
-            textColor=PRIMARY
-        )
-        th_style = ParagraphStyle(
-            'TableHeader',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=8,
-            leading=10,
-            textColor=colors.white
-        )
-        cell_style = ParagraphStyle(
-            'TableCell',
-            parent=styles['Normal'],
-            fontName='Helvetica',
-            fontSize=7.5,
-            leading=10,
-            textColor=TEXT_DARK
-        )
-        badge_crit = ParagraphStyle(
-            'BadgeCrit',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=7.5,
-            leading=9,
-            textColor=RED_COLOR
-        )
-        badge_warn = ParagraphStyle(
-            'BadgeWarn',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=7.5,
-            leading=9,
-            textColor=AMBER_COLOR
-        )
-        badge_info = ParagraphStyle(
-            'BadgeInfo',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=7.5,
-            leading=9,
-            textColor=ACCENT_BLUE
-        )
-        reason_style = ParagraphStyle(
-            'ReasonText',
-            parent=styles['Normal'],
-            fontName='Helvetica-Oblique',
-            fontSize=7.5,
-            leading=10,
-            textColor=MUTED_TEXT
-        )
-        badge_succ = ParagraphStyle(
-            'BadgeSucc',
-            parent=styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=7.5,
-            leading=9,
-            textColor=GREEN_COLOR
-        )
+        GREEN      = colors.HexColor("#16A34A"); ORANGE    = colors.HexColor("#EA580C")
+        RED        = colors.HexColor("#DC2626"); BLUE_A    = colors.HexColor("#2563EB")
+        AMBER      = colors.HexColor("#D97706"); GREY      = colors.HexColor("#64748B")
+        SLATE_900  = colors.HexColor("#0F172A"); SLATE_700 = colors.HexColor("#334155")
+        SLATE_200  = colors.HexColor("#E2E8F0"); SLATE_50  = colors.HexColor("#F8FAFC")
+        GREEN_BG   = colors.HexColor("#F0FDF4"); ORANGE_BG = colors.HexColor("#FFF7ED")
+        RED_BG     = colors.HexColor("#FEF2F2"); BLUE_BG   = colors.HexColor("#EFF6FF")
+        AMBER_BG   = colors.HexColor("#FFFBEB"); WHITE     = colors.white
 
-        elements = []
+        def _ps(name, **kw):
+            return ParagraphStyle(name, parent=kw.pop("parent", styles["Normal"]), **kw)
+        body      = _ps("body",   fontName="Helvetica",       fontSize=8.5, leading=11, textColor=SLATE_700)
+        small     = _ps("small",  fontName="Helvetica",       fontSize=7.5, leading=10, textColor=SLATE_700)
+        small_b   = _ps("smallb", fontName="Helvetica-Bold",  fontSize=7.5, leading=10, textColor=SLATE_900)
+        italic_s  = _ps("italic", fontName="Helvetica-Oblique", fontSize=8.5, leading=11, textColor=GREY)
+        th_s      = _ps("th",     fontName="Helvetica-Bold",  fontSize=8,   leading=10, textColor=WHITE)
+        kpi_num_s = _ps("kpin",   fontName="Helvetica-Bold",  fontSize=20,  leading=24, alignment=1)
+        kpi_lbl_s = _ps("kpil",   fontName="Helvetica",       fontSize=7,   leading=9,  alignment=1, textColor=GREY)
+        title_lg  = _ps("titlel", fontName="Helvetica-Bold",  fontSize=22,  leading=26, textColor=SLATE_900)
+        title_sm  = _ps("titles", fontName="Helvetica-Bold",  fontSize=14,  leading=18, textColor=SLATE_900)
+        subtitle  = _ps("sub",    fontName="Helvetica",       fontSize=9,   leading=12, textColor=GREY)
 
-        # =========================================================
-        # 1. HEADER & BRANDING
-        # =========================================================
-        brand_data = [
-            [
-                Paragraph("<b>CROSSCHECK</b><font color='#2563EB'>PRO</font>", title_style),
-                Paragraph(f"<b>PROJECT AUDIT & VERIFICATION REPORT</b><br/><font color='#64748B'>Report ID: {uuid.uuid4().hex[:12].upper()}</font>", ParagraphStyle('RAlign', parent=subtitle_style, alignment=2))
-            ]
-        ]
-        brand_table = Table(brand_data, colWidths=[270, 270])
-        brand_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-            ('TOPPADDING', (0,0), (-1,-1), 0),
-        ]))
-        elements.append(brand_table)
-        elements.append(Spacer(1, 4))
-        elements.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT_BLUE, spaceBefore=4, spaceAfter=8))
+        def sec_hdr(text, col):
+            p = Paragraph(f"<b>{text}</b>", _ps(f"sh{text[:6].replace(' ','')}", fontName="Helvetica-Bold", fontSize=13, leading=17, textColor=col, spaceBefore=14, spaceAfter=4))
+            return [p, HRFlowable(width="100%", thickness=1.5, color=col, spaceBefore=0, spaceAfter=6)]
 
-        # =========================================================
-        # 2. PROJECT SUMMARY & DOCUMENT INFO
-        # =========================================================
-        status_str = project.status.value if hasattr(project.status, 'value') else str(project.status)
-        finalized_badge = "YES (FINALIZED)" if status_str == "FINALIZED" else f"NO ({status_str})"
+        def tbl_style(hdr_col, row_bgs, border=None):
+            bc = border or colors.HexColor("#E2E8F0")
+            return TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), hdr_col),
+                ("BOX", (0,0), (-1,-1), 1, bc),
+                ("INNERGRID", (0,0), (-1,-1), 0.5, bc),
+                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("TOPPADDING", (0,0), (-1,-1), 3), ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+                ("ROWBACKGROUNDS", (0,1), (-1,-1), row_bgs),
+            ])
 
-        meta_left = [
-            [Paragraph("Project Name:", body_bold), Paragraph(project.name or "Unnamed", body_style)],
-            [Paragraph("Project ID:", body_bold), Paragraph(str(project.id), body_style)],
-            [Paragraph("Customer:", body_bold), Paragraph(project.customer_name or "N/A", body_style)],
-            [Paragraph("Dealer:", body_bold), Paragraph(project.dealer_name or "N/A", body_style)],
-            [Paragraph("Created Date:", body_bold), Paragraph(project.created_at.strftime("%Y-%m-%d %H:%M") if project.created_at else "N/A", body_style)],
-            [Paragraph("Finalized Status:", body_bold), Paragraph(f"<b>{finalized_badge}</b>", badge_succ if status_str == "FINALIZED" else body_style)],
-        ]
-        meta_left_table = Table(meta_left, colWidths=[90, 170])
-        meta_left_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-            ('TOPPADDING', (0,0), (-1,-1), 2),
-        ]))
+        els = []
 
-        doc_by_type = { (d.document_type.name if hasattr(d.document_type, 'name') else str(d.document_type)): d for d in documents }
-        design_d = doc_by_type.get("DESIGN")
-        order_d = doc_by_type.get("ORDER")
-        ack_d = doc_by_type.get("ACKNOWLEDGEMENT")
+        # -- 1. HEADER --
+        hdr = Table([
+            [Paragraph("<b>CROSSCHECK<font color='#2563EB'>PRO</font></b>", title_lg), Paragraph(f"<b>{project.name or 'Unnamed Project'}</b>", title_sm)],
+            [Paragraph("Cabinet Order Verification Report", subtitle), Paragraph(f"Customer: {project.customer_name or 'N/A'}  |  Dealer: {project.dealer_name or 'N/A'}", subtitle)],
+            ["", Paragraph(f"Date: {datetime.datetime.now(datetime.timezone.utc).strftime('%B %d, %Y')}", subtitle)],
+        ], colWidths=[270, 270])
+        hdr.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2)]))
+        els.append(hdr)
+        els.append(HRFlowable(width="100%", thickness=2, color=BLUE_A, spaceBefore=6, spaceAfter=10))
 
-        meta_right = [
-            [Paragraph("<b>Document Source</b>", body_bold), Paragraph("<b>File / Status</b>", body_bold)],
-            [
-                Paragraph("1. Design Document:", body_bold),
-                Paragraph(f"{design_d.original_filename} ({design_d.status})" if design_d else "<font color='#DC2626'>Missing</font>", body_style)
-            ],
-            [
-                Paragraph("2. Order Document:", body_bold),
-                Paragraph(f"{order_d.original_filename} ({order_d.status})" if order_d else "<font color='#DC2626'>Missing</font>", body_style)
-            ],
-            [
-                Paragraph("3. Acknowledgement:", body_bold),
-                Paragraph(f"{ack_d.original_filename} ({ack_d.status})" if ack_d else "<font color='#DC2626'>Missing</font>", body_style)
-            ],
-            [
-                Paragraph("Total Documents:", body_bold),
-                Paragraph(f"{len(documents)} uploaded", body_style)
-            ],
-        ]
-        meta_right_table = Table(meta_right, colWidths=[110, 160])
-        meta_right_table.setStyle(TableStyle([
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
-            ('TOPPADDING', (0,0), (-1,-1), 2),
-        ]))
-
-        project_info_container = Table([
-            [meta_left_table, meta_right_table]
-        ], colWidths=[265, 275])
-        project_info_container.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), BG_LIGHT),
-            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('PADDING', (0,0), (-1,-1), 6),
-        ]))
-        elements.append(project_info_container)
-        elements.append(Spacer(1, 8))
-
-        # =========================================================
-        # 3. THREE-WAY CROSS-CHECK SUMMARY METRICS
-        # =========================================================
-        elements.append(Paragraph("Cross-Check Summary", h2_style))
-        summary_cards = [
-            [
-                Paragraph("<font size=7 color='#64748B'>MATCHED</font><br/><font size=12><b>" + str(matched_cnt) + "</b></font>", ParagraphStyle('C1', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#64748B'>CHANGED</font><br/><font size=12><b>" + str(changed_cnt) + "</b></font>", ParagraphStyle('C2', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#64748B'>MISSING</font><br/><font size=12><b>" + str(missing_cnt) + "</b></font>", ParagraphStyle('C3', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#64748B'>EXTRA</font><br/><font size=12><b>" + str(extra_cnt) + "</b></font>", ParagraphStyle('C4', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#64748B'>UNCERTAIN</font><br/><font size=12><b>" + str(uncertain_cnt) + "</b></font>", ParagraphStyle('C5', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#DC2626'>CRITICAL</font><br/><font size=12 color='#DC2626'><b>" + str(critical_disc) + "</b></font>", ParagraphStyle('C6', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#D97706'>WARNING</font><br/><font size=12 color='#D97706'><b>" + str(warning_disc) + "</b></font>", ParagraphStyle('C7', parent=body_style, alignment=1)),
-                Paragraph("<font size=7 color='#2563EB'>INFO</font><br/><font size=12 color='#2563EB'><b>" + str(info_disc) + "</b></font>", ParagraphStyle('C8', parent=body_style, alignment=1)),
-            ]
-        ]
-        summary_table = Table(summary_cards, colWidths=[67.5]*8)
-        summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), BG_LIGHT),
-            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ]))
-        elements.append(summary_table)
-        elements.append(Spacer(1, 10))
-
-        # =========================================================
-        # 4. DETAILED DISCREPANCY TABLE
-        # =========================================================
-        elements.append(Paragraph(f"Detailed Discrepancies ({len(discrepancies)} Detected)", h2_style))
-        if not discrepancies:
-            elements.append(Paragraph("<i>No discrepancies detected. All three documents are perfectly aligned.</i>", body_style))
+        # -- 2. STATUS BANNER --
+        if matched_pct >= 90 and not has_critical:
+            b_col, b_bg, b_txt = GREEN, GREEN_BG, "\u2713  LOOKING GOOD \u2014 Minor items need your attention."
+        elif matched_pct >= 70:
+            b_col, b_bg, b_txt = ORANGE, ORANGE_BG, "\u25ce  REVIEW REQUIRED \u2014 Several items need to be verified."
         else:
-            disc_headers = [
-                Paragraph("SKU", th_style),
-                Paragraph("Field / Type", th_style),
-                Paragraph("Design", th_style),
-                Paragraph("Order", th_style),
-                Paragraph("Ack", th_style),
-                Paragraph("Severity", th_style),
-                Paragraph("Introduced At", th_style),
-                Paragraph("Status", th_style)
-            ]
-            disc_rows = [disc_headers]
-            reason_row_indices: List[int] = []
+            b_col, b_bg, b_txt = RED, RED_BG, "\u26a0  ACTION REQUIRED \u2014 Important differences found that must be resolved."
+        banner = Table([[Paragraph(b_txt, _ps("ban", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=b_col, alignment=1))]], colWidths=[540])
+        banner.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),b_bg),("BOX",(0,0),(-1,-1),1.5,b_col),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),("LEFTPADDING",(0,0),(-1,-1),12)]))
+        els.append(banner); els.append(Spacer(1, 10))
 
-            mg_map = {mg.id: mg for mg in match_groups}
-            for d in discrepancies:
-                mg = mg_map.get(d.match_group_id)
-                sku_text = mg.final_sku or (mg.design_item.normalized_sku if mg and mg.design_item else "") or (mg.order_item.normalized_sku if mg and mg.order_item else "") or (mg.ack_item.normalized_sku if mg and mg.ack_item else "N/A")
-                
-                # Extract values from source_values & comparison_values
-                src_vals = d.source_values
-                if isinstance(src_vals, str):
-                    try:
-                        src_vals = json.loads(src_vals)
-                    except Exception:
-                        src_vals = {}
-                elif not isinstance(src_vals, dict):
-                    src_vals = {}
-
-                comp_vals = d.comparison_values
-                if isinstance(comp_vals, str):
-                    try:
-                        comp_vals = json.loads(comp_vals)
-                    except Exception:
-                        comp_vals = {}
-                elif not isinstance(comp_vals, dict):
-                    comp_vals = {}
-                
-                d_val = src_vals.get("design") or comp_vals.get("design") or (getattr(mg.design_item, d.field, None) if mg and mg.design_item else "")
-                o_val = src_vals.get("order") or comp_vals.get("order") or (getattr(mg.order_item, d.field, None) if mg and mg.order_item else "")
-                a_val = src_vals.get("acknowledgement") or comp_vals.get("acknowledgement") or (getattr(mg.ack_item, d.field, None) if mg and mg.ack_item else "")
-
-                sev_str = d.severity.value if hasattr(d.severity, 'value') else str(d.severity)
-                if sev_str in ["Critical", "CRITICAL"]:
-                    sev_p = Paragraph(f"<b>{sev_str}</b>", badge_crit)
-                elif sev_str in ["Warning", "WARNING"]:
-                    sev_p = Paragraph(f"<b>{sev_str}</b>", badge_warn)
-                else:
-                    sev_p = Paragraph(f"{sev_str}", badge_info)
-
-                intro_str = d.introduced_at.value if hasattr(d.introduced_at, 'value') else (str(d.introduced_at) if d.introduced_at else "-")
-                status_p = Paragraph(d.status, badge_succ if d.status in ("ACCEPTED", "ACKNOWLEDGED", "RESOLVED") else body_style)
-
-                disc_rows.append([
-                    Paragraph(f"<b>{sku_text}</b>", cell_style),
-                    Paragraph(d.field or "-", cell_style),
-                    Paragraph(self._format_val(d_val) or "-", cell_style),
-                    Paragraph(self._format_val(o_val) or "-", cell_style),
-                    Paragraph(self._format_val(a_val) or "-", cell_style),
-                    sev_p,
-                    Paragraph(intro_str, cell_style),
-                    status_p
-                ])
-
-                # Reason row: full-width explanation of why this discrepancy was flagged
-                reason_text = d.explanation or "No explanation recorded for this discrepancy."
-                reason_row_idx = len(disc_rows)
-                disc_rows.append([
-                    Paragraph(f"<b>Reason:</b> {reason_text}", reason_style),
-                    "", "", "", "", "", "", ""
-                ])
-                reason_row_indices.append(reason_row_idx)
-
-            # Total printable width: 540 pt
-            disc_table = Table(disc_rows, colWidths=[70, 75, 65, 65, 65, 60, 70, 70], repeatRows=1)
-            table_style_cmds = [
-                ('BACKGROUND', (0,0), (-1,0), PRIMARY),
-                ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-                ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('TOPPADDING', (0,0), (-1,-1), 3),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-            ]
-            for idx in reason_row_indices:
-                table_style_cmds.append(('SPAN', (0, idx), (-1, idx)))
-                table_style_cmds.append(('BACKGROUND', (0, idx), (-1, idx), BG_LIGHT))
-            disc_table.setStyle(TableStyle(table_style_cmds))
-            elements.append(disc_table)
-
-        elements.append(Spacer(1, 10))
-
-        # =========================================================
-        # 5. FINAL RESOLVED STATE TABLE
-        # =========================================================
-        elements.append(Paragraph("Final Resolved State", h2_style))
-        final_headers = [
-            Paragraph("Final SKU", th_style),
-            Paragraph("Qty", th_style),
-            Paragraph("Dimensions", th_style),
-            Paragraph("Finish", th_style),
-            Paragraph("Door Style", th_style),
-            Paragraph("Modifications", th_style),
-            Paragraph("Price", th_style),
-            Paragraph("Status", th_style)
+        # -- 3. EXECUTIVE SUMMARY --
+        els += sec_hdr("Executive Summary", BLUE_A)
+        kpi_specs = [
+            (str(len(active_mgs)),  "Total Items\nChecked",    BLUE_BG,   BLUE_A),
+            (str(len(matched_mgs)), "Items That\nMatch",       GREEN_BG,  GREEN),
+            (str(len(changed_mgs)), "Items With\nDifferences", ORANGE_BG, ORANGE),
+            (str(len(missing_mgs)+len(extra_mgs)), "Missing /\nExtra", RED_BG, RED),
+            (str(len(uncertain_mgs)),"Needs\nConfirmation",   SLATE_50,  GREY),
         ]
-        final_rows = [final_headers]
-        for mg in match_groups:
-            sku_p = Paragraph(f"<b>{mg.final_sku or 'N/A'}</b>", cell_style)
-            qty_p = Paragraph(str(mg.final_quantity) if mg.final_quantity is not None else "-", cell_style)
-            dim_p = Paragraph(self._format_val(mg.final_dimensions) or "-", cell_style)
-            fin_p = Paragraph(mg.final_finish or "-", cell_style)
-            door_p = Paragraph(mg.final_door_style or "-", cell_style)
-            mods_p = Paragraph(self._format_val(mg.final_modifications) or "-", cell_style)
-            price_p = Paragraph(mg.final_price or "-", cell_style)
-            st_p = Paragraph(mg.final_status or (mg.status.value if hasattr(mg.status, 'value') else str(mg.status)), cell_style)
+        kpi_cells = []
+        for num, lbl, bg, col in kpi_specs:
+            inner = Table([[Paragraph(f"<font color='{col.hexval()}'><b>{num}</b></font>", kpi_num_s)],[Paragraph(lbl, kpi_lbl_s)]], colWidths=[100])
+            inner.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6)]))
+            wrap = Table([[inner]], colWidths=[106])
+            wrap.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),bg),("BOX",(0,0),(-1,-1),1,col),("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0)]))
+            kpi_cells.append(wrap)
+        kpi_tbl = Table([kpi_cells], colWidths=[108]*5)
+        kpi_tbl.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),1),("RIGHTPADDING",(0,0),(-1,-1),1)]))
+        els.append(kpi_tbl); els.append(Spacer(1, 12))
 
-            final_rows.append([sku_p, qty_p, dim_p, fin_p, door_p, mods_p, price_p, st_p])
+        # -- 4. ITEMS THAT MATCH --
+        els += sec_hdr("Items That Match", GREEN)
+        els.append(Paragraph("The following items appear correctly across all three documents.", body)); els.append(Spacer(1,4))
+        if matched_mgs:
+            rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty (Design)","Qty (Order)","Qty (Ack)","Result"]]]
+            for mg in matched_mgs:
+                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:60], small),
+                              Paragraph(str(_get_item_qty(d)) if _get_item_qty(d) is not None else "-", small),
+                              Paragraph(str(_get_item_qty(o)) if _get_item_qty(o) is not None else "-", small),
+                              Paragraph(str(_get_item_qty(a)) if _get_item_qty(a) is not None else "-", small),
+                              Paragraph("<font color='#16A34A'><b>\u2713 Match</b></font>", small_b)])
+            t = Table(rows, colWidths=[80,180,60,60,60,100], repeatRows=1); t.setStyle(tbl_style(GREEN,[WHITE,GREEN_BG])); els.append(t)
+        else:
+            els.append(Paragraph("<i>No exact matches found.</i>", italic_s))
+        els.append(Spacer(1, 10))
 
-        final_table = Table(final_rows, colWidths=[75, 30, 85, 70, 70, 100, 50, 60], repeatRows=1)
-        final_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), SECONDARY),
-            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
-            ('TOPPADDING', (0,0), (-1,-1), 3),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, BG_LIGHT])
-        ]))
-        elements.append(final_table)
-        elements.append(Spacer(1, 10))
+        # -- 5. ITEMS THAT NEED ATTENTION (CHANGED) --
+        els += sec_hdr("Items That Need Attention", ORANGE)
+        els.append(Paragraph("These items were found in all documents but have specification differences.", body)); els.append(Spacer(1,4))
+        if changed_mgs:
+            rows = [[Paragraph(h, th_s) for h in ["Item Code","What Changed","In Design Drawing","In Purchase Order","In Mfr. Confirmation","Severity"]]]
+            for mg in changed_mgs:
+                discs = mg_disc_map.get(mg.id, [])
+                if discs:
+                    for d in discs:
+                        sv = _sv(d)
+                        sev = (d.severity.value if hasattr(d.severity,"value") else str(d.severity)).upper()
+                        sc = RED if sev=="CRITICAL" else (ORANGE if sev=="WARNING" else GREY)
+                        sl = {"CRITICAL":"\u26a0 Action Required","WARNING":"\u25ce Needs Review"}.get(sev,"\u2139 For Your Info")
+                        rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_fl(d.field), small),
+                                     Paragraph(self._format_val(sv.get("design") or "-"), small),
+                                     Paragraph(self._format_val(sv.get("order") or "-"), small),
+                                     Paragraph(self._format_val(sv.get("acknowledgement") or "-"), small),
+                                     Paragraph(f"<font color='{sc.hexval()}'><b>{sl}</b></font>", small)])
+                else:
+                    rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph("See Details", small),
+                                 Paragraph("-",small),Paragraph("-",small),Paragraph("-",small),Paragraph("\u25ce Needs Review",small)])
+            t = Table(rows, colWidths=[75,80,90,90,90,115], repeatRows=1); t.setStyle(tbl_style(ORANGE,[WHITE,ORANGE_BG])); els.append(t)
+        else:
+            els.append(Paragraph("<i>No specification differences found.</i>", italic_s))
+        els.append(Spacer(1, 10))
 
-        # =========================================================
-        # 6. HUMAN REVIEW & AUDIT LOG INFORMATION
-        # =========================================================
-        if reviews:
-            elements.append(Paragraph(f"Human Review History ({len(reviews)} Actions)", h2_style))
-            rev_headers = [
-                Paragraph("Action", th_style),
-                Paragraph("Reviewer", th_style),
-                Paragraph("Timestamp", th_style),
-                Paragraph("Reason / Notes", th_style)
-            ]
-            rev_rows = [rev_headers]
-            for r in reviews:
-                act_str = r.action.value if hasattr(r.action, 'value') else str(r.action)
-                rev_user = r.reviewer.email if r.reviewer else (str(r.reviewer_id) if r.reviewer_id else "System")
-                dt_str = r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "-"
-                notes_str = r.reason or "-"
-                rev_rows.append([
-                    Paragraph(f"<b>{act_str}</b>", cell_style),
-                    Paragraph(rev_user, cell_style),
-                    Paragraph(dt_str, cell_style),
-                    Paragraph(notes_str, cell_style)
-                ])
+        # -- 6. MISSING ITEMS --
+        els += sec_hdr("Missing Items", RED)
+        els.append(Paragraph("These items appear in the Design Drawing but could not be found in the Purchase Order or Manufacturer Confirmation.", body)); els.append(Spacer(1,4))
+        if missing_mgs:
+            rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty in Design","Found in PO","Found in Ack","Action Needed"]]]
+            for mg in missing_mgs:
+                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:50], small),
+                             Paragraph(str(_get_item_qty(d)) if _get_item_qty(d) is not None else "-", small),
+                             Paragraph("-" if o else "<font color='#DC2626'>No</font>", small),
+                             Paragraph("-" if a else "<font color='#DC2626'>No</font>", small),
+                             Paragraph("Confirm with dealer \u2014 item is in design but not ordered.", small)])
+            t = Table(rows, colWidths=[75,120,60,60,60,165], repeatRows=1); t.setStyle(tbl_style(RED,[WHITE,RED_BG])); els.append(t)
+        else:
+            els.append(Paragraph("<i><font color='#16A34A'>No missing items \u2014 all design items accounted for.</font></i>", italic_s))
+        els.append(Spacer(1, 10))
 
-            rev_table = Table(rev_rows, colWidths=[120, 120, 100, 200], repeatRows=1)
-            rev_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), PRIMARY),
-                ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-                ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('TOPPADDING', (0,0), (-1,-1), 3),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, BG_LIGHT])
-            ]))
-            elements.append(rev_table)
-            elements.append(Spacer(1, 10))
+        # -- 7. EXTRA ITEMS --
+        els += sec_hdr("Extra Items", AMBER)
+        els.append(Paragraph("These items appear in the Purchase Order but were not found in the Design Drawing.", body)); els.append(Spacer(1,4))
+        if extra_mgs:
+            rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty Ordered","Found in Design","Note"]]]
+            for mg in extra_mgs:
+                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:50], small),
+                             Paragraph(str(_get_item_qty(o)) if _get_item_qty(o) is not None else "-", small),
+                             Paragraph("-" if d else "<font color='#D97706'>Not in Design</font>", small),
+                             Paragraph("Verify this is an intentional addition or an appliance/accessory not shown in the design.", small)])
+            t = Table(rows, colWidths=[75,120,60,80,205], repeatRows=1); t.setStyle(tbl_style(AMBER,[WHITE,AMBER_BG])); els.append(t)
+        else:
+            els.append(Paragraph("<i>No extra items found.</i>", italic_s))
+        els.append(Spacer(1, 10))
 
-        if audit_logs:
-            elements.append(Paragraph(f"Audit Trail (Recent Events)", h2_style))
-            audit_headers = [
-                Paragraph("Action", th_style),
-                Paragraph("Actor", th_style),
-                Paragraph("Resource", th_style),
-                Paragraph("Timestamp", th_style)
-            ]
-            audit_rows = [audit_headers]
-            for a in audit_logs[:15]: # Show up to 15 most recent
-                actor_str = a.actor.email if a.actor else (str(a.actor_id) if a.actor_id else "System")
-                dt_str = a.created_at.strftime("%Y-%m-%d %H:%M") if a.created_at else "-"
-                res_str = f"{a.resource_type}:{str(a.resource_id)[:8]}"
-                audit_rows.append([
-                    Paragraph(a.action, cell_style),
-                    Paragraph(actor_str, cell_style),
-                    Paragraph(res_str, cell_style),
-                    Paragraph(dt_str, cell_style)
-                ])
+        # -- 8. NEEDS CONFIRMATION (UNCERTAIN) --
+        if uncertain_mgs:
+            els += sec_hdr("Needs Confirmation", GREY)
+            els.append(Paragraph("The following items could not be conclusively matched. Manual review is recommended before finalising the order.", body)); els.append(Spacer(1,4))
+            rows = [[Paragraph(h, th_s) for h in ["Item Code","Available In","Reason for Uncertainty"]]]
+            for mg in uncertain_mgs:
+                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                avail = (["Design Drawing"] if d else []) + (["Purchase Order"] if o else []) + (["Mfr. Confirmation"] if a else [])
+                discs = mg_disc_map.get(mg.id, [])
+                reason = (discs[0].explanation if discs and discs[0].explanation else "Automatic matching was inconclusive.")[:120]
+                rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(", ".join(avail) or "-", small), Paragraph(reason, small)])
+            t = Table(rows, colWidths=[80,160,300], repeatRows=1); t.setStyle(tbl_style(GREY,[WHITE,SLATE_50])); els.append(t)
+            els.append(Spacer(1, 10))
 
-            audit_table = Table(audit_rows, colWidths=[160, 140, 120, 120], repeatRows=1)
-            audit_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), SECONDARY),
-                ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
-                ('INNERGRID', (0,0), (-1,-1), 0.5, BORDER_COLOR),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('TOPPADDING', (0,0), (-1,-1), 3),
-                ('BOTTOMPADDING', (0,0), (-1,-1), 3),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, BG_LIGHT])
-            ]))
-            elements.append(audit_table)
+        # -- 9. SPECIFICATION DIFFERENCES SUMMARY --
+        spec_discs = [d for d in discrepancies if d.field and d.field != "item_presence"]
+        if spec_discs:
+            els += sec_hdr("Specification Differences Summary", ORANGE)
+            els.append(Paragraph("A summary of key specification fields where differences were found.", body)); els.append(Spacer(1,4))
+            fc: Dict[str, Any] = {}
+            for d in spec_discs:
+                f2 = d.field or "other"; sev = (d.severity.value if hasattr(d.severity,"value") else str(d.severity)).upper()
+                if f2 not in fc: fc[f2] = {"count":0,"max_sev":"INFO"}
+                fc[f2]["count"] += 1
+                if {"CRITICAL":2,"WARNING":1,"INFO":0}.get(sev,0) > {"CRITICAL":2,"WARNING":1,"INFO":0}.get(fc[f2]["max_sev"],0): fc[f2]["max_sev"]=sev
+            rows = [[Paragraph(h, th_s) for h in ["Specification Field","Differences Found","Highest Severity"]]]
+            sev_labels = {"CRITICAL":"\u26a0 Action Required","WARNING":"\u25ce Needs Review","INFO":"\u2139 For Your Info"}
+            for f2, info in sorted(fc.items(), key=lambda x: -x[1]["count"]):
+                sc = RED if info["max_sev"]=="CRITICAL" else (ORANGE if info["max_sev"]=="WARNING" else GREY)
+                rows.append([Paragraph(_fl(f2),small), Paragraph(str(info["count"]),small),
+                             Paragraph(f"<font color='{sc.hexval()}'><b>{sev_labels.get(info['max_sev'],info['max_sev'])}</b></font>",small)])
+            t = Table(rows, colWidths=[220,120,200], repeatRows=1); t.setStyle(tbl_style(ORANGE,[WHITE,ORANGE_BG])); els.append(t)
+            els.append(Spacer(1, 10))
 
-        # Build document with NumberedCanvas
-        doc.build(elements, canvasmaker=NumberedCanvas)
+        # -- 10. DOCUMENT RELATIONSHIP NOTE --
+        note = ("<b>Note on Document Relationship:</b> The Purchase Order and Manufacturer Confirmation in this project "
+                "may be related documents. If the Purchase Order was prepared from the Manufacturer Acknowledgment, "
+                "independent verification between these two documents may not be available. CrossCheckPro has verified "
+                "all three documents against the Design Drawing.")
+        note_tbl = Table([[Paragraph(note, _ps("note", fontName="Helvetica", fontSize=8, leading=11, textColor=SLATE_700))]], colWidths=[540])
+        note_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),SLATE_50),("BOX",(0,0),(-1,-1),1,SLATE_200),("LEFTPADDING",(0,0),(-1,-1),10),("RIGHTPADDING",(0,0),(-1,-1),10),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
+        els.append(note_tbl); els.append(Spacer(1, 10))
+
+        # -- 11. WHAT SHOULD BE DONE NEXT? --
+        els += sec_hdr("What Should Be Done Next?", BLUE_A)
+        steps = []
+        if len(active_mgs) > 0 and len(matched_mgs) == len(active_mgs):
+            steps.append("All items have been verified. You may proceed to finalise the order.")
+        else:
+            if missing_mgs:  steps.append(f"Review {len(missing_mgs)} missing item(s) with your dealer and confirm whether they should be added to the order.")
+            if extra_mgs:    steps.append(f"Verify {len(extra_mgs)} extra item(s) with your dealer \u2014 confirm these are intentional additions.")
+            if changed_mgs:  steps.append("Review specification differences \u2014 confirm all colour, finish, and door style changes are intentional.")
+            if uncertain_mgs: steps.append(f"Manually review {len(uncertain_mgs)} item(s) that could not be automatically matched.")
+            steps.append("Once all items are confirmed, use CrossCheckPro's Human Review feature to finalise the project.")
+        for i, step in enumerate(steps, 1):
+            els.append(Paragraph(f"{i}. {step}", body)); els.append(Spacer(1, 3))
+        els.append(Spacer(1, 10))
+
+        # -- 12. DOCUMENTS REVIEWED --
+        els += sec_hdr("Documents Reviewed", GREY)
+        doc_rows = [[Paragraph(h, th_s) for h in ["Document Type","File Name","Status"]]]
+        for lbl, dobj in [("Design Drawing",design_d),("Purchase Order",order_d),("Manufacturer Confirmation",ack_d)]:
+            if dobj:
+                fname = dobj.original_filename or "-"
+                status = dobj.status.value if hasattr(dobj.status,"value") else str(dobj.status)
+            else:
+                fname, status = "Not uploaded", "Missing"
+            doc_rows.append([Paragraph(lbl,small), Paragraph(fname,small), Paragraph(status,small)])
+        doc_tbl = Table(doc_rows, colWidths=[160,240,140], repeatRows=1)
+        doc_tbl.setStyle(tbl_style(GREY,[WHITE,SLATE_50])); els.append(doc_tbl)
+
+        pdf_doc.build(els, canvasmaker=NumberedCanvas)
         return buffer.getvalue()
 
-    # -------------------------------------------------------------
-    # 2b. Shareable Summary — P2-2: a separate, one-page, actionable-only
-    # report meant to be forwarded to an external party (the manufacturer),
-    # unlike the full audit report above (which is explicitly marked
-    # "Confidential — For Internal Organization Use Only"). Only OPEN/
-    # ESCALATED discrepancies — nothing already resolved — with the
-    # acknowledgement's own line number so the manufacturer can find each
-    # item in their own document.
-    # -------------------------------------------------------------
     def _get_actionable_discrepancies(self, project_id: uuid.UUID, organization_id: uuid.UUID):
         project = self.db.scalars(
             select(Project).where(Project.id == project_id, Project.organization_id == organization_id)
