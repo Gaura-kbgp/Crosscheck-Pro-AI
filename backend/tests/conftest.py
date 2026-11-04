@@ -46,8 +46,20 @@ def mock_celery_delay(monkeypatch):
     monkeypatch.setattr("celery.app.task.Task.delay", lambda *args, **kwargs: None)
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter():
-    from app.core.rate_limiter import reset_rate_limit_store
+def reset_rate_limiter(monkeypatch):
+    from app.core.rate_limiter import reset_rate_limit_store, RateLimiter
+
+    # RateLimiter tries the real Redis (settings.REDIS_URL — the project's
+    # actual shared Upstash instance per .env) before falling back to the
+    # in-memory store this fixture resets. Tests therefore accumulate hits
+    # against that one shared, cross-run Redis key regardless of the reset
+    # below, causing cascading 429s the more times the suite has been run
+    # (observed: auth/password tests failing with 429 instead of their
+    # expected status). Force the in-memory path for the whole test session
+    # so rate-limit tests are deterministic and isolated from any other
+    # process hitting the same Redis instance.
+    monkeypatch.setattr(RateLimiter, "_check_redis", lambda self, key: None)
+
     reset_rate_limit_store()
     yield
     reset_rate_limit_store()
