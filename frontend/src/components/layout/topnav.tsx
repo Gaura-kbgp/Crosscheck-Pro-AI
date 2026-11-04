@@ -3,7 +3,6 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 import { Menu, Building2, Bell } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useOrganization } from "@/lib/hooks/use-organization";
 
@@ -64,10 +63,6 @@ export function TopNav({ onOpenMobileMenu }: TopNavProps) {
             <span className="max-w-[160px] truncate">{organization.name}</span>
           </div>
         )}
-
-        <Badge variant="success" dot dotColor="bg-[#16A34A]" className="hidden md:inline-flex text-xs">
-          Live System
-        </Badge>
       </div>
     </header>
   );
