@@ -19,7 +19,7 @@ import uuid
 # (new prompt safety rules, page evidence, OCR/reconciliation, etc). Combined
 # with document_hash + provider + model + prompt_version, this is the
 # identity used to decide whether a prior extraction can be safely reused.
-EXTRACTION_VERSION = "f8.3.4"
+EXTRACTION_VERSION = "f8.3.5"
 
 
 def _get_db():
@@ -76,7 +76,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
     job_id = uuid.UUID(job_id_str)
     project_id = uuid.UUID(project_id_str)
     organization_id = uuid.UUID(organization_id_str)
-    
+
     # ── Stage 1: Validation ──
     _update_job_status(job_id, ProcessingJobStatus.VALIDATING, project_id=project_id)
     
@@ -443,7 +443,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
         design_items = [i for i in all_canonical_items if i.source_type.value == "DESIGN"]
         order_items = [i for i in all_canonical_items if i.source_type.value == "ORDER"]
         ack_items = [i for i in all_canonical_items if i.source_type.value == "ACKNOWLEDGEMENT"]
-        
+
         from app.engines.matching import MatchingEngine
         matching_engine = MatchingEngine()
         match_groups = matching_engine.match_items(design_items, order_items, ack_items, project_id, organization_id)

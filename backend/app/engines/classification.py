@@ -148,7 +148,11 @@ class ItemClassifier:
     ]
 
     FILLER_SKU_PATTERNS = [
-        r'^(BF|WF|TF|FLR|FIL|FILLER|FF)[0-9]*[A-Z0-9]*$',
+        # BF/WF/TF require a digit immediately after the prefix to prevent false
+        # matches on hardware codes like BFH (Base Frame Hardware) which start
+        # with the same two letters but are not fillers.
+        r'^(BF|WF|TF)[0-9]+[A-Z0-9]*$',
+        r'^(FLR|FIL|FILLER|FF)[0-9]*[A-Z0-9]*$',
         r'.*FILLER.*'
     ]
 
@@ -164,13 +168,16 @@ class ItemClassifier:
 
     ACCESSORY_SKU_PATTERNS = [
         r'^(ROT|TD|TP|CR|LEG|POST|CRB|TUK|WR|SR|SBK)[0-9]*[A-Z0-9]*$',
-        r'^(PULLOUT|ORGANIZER)[0-9]*[A-Z0-9]*$'
+        r'^(PULLOUT|ORGANIZER)[0-9]*[A-Z0-9]*$',
+        # Frame hardware codes (BFH = Base Frame Hardware, WFH = Wall Frame Hardware, etc.)
+        r'^(BFH|WFH|TFH)[0-9A-Z_.-]*$',
     ]
 
     CABINET_SKU_PATTERNS = [
         r'^(B|BT|SB|DB|CB|PB|BBC|BLB|VB|VSB|VDB|3DB|4DB)[0-9]+.*$', # Base / Vanity / Tray / Corner
         r'^(W|WST|WW|WDC|WBC|WTC|WCR)[0-9]+.*$',                    # Wall / Stacked Wall
         r'^(T|U|PC|UTIL|OC|OVC|DOC|TOC)[0-9]+.*$',                  # Tall / Utility
+        r'^(D|DD)[0-9]+.*$',                                         # Desk / Drawer cabinet
         r'^(CAB|CABINET)[0-9]+.*$'                                  # Generic cabinet prefix
     ]
 

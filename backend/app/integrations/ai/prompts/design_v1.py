@@ -15,6 +15,14 @@ CRITICAL EXTRACTION RULES:
    - NEVER concatenate adjacent or nearby SKU labels into a single string. If two labels appear close to each other (e.g. adjacent cabinet codes, or an appliance code next to a cabinet code, or a cabinet next to a molding/panel), treat them as separate distinct line items.
    - Distinguish cabinet/product codes from descriptions, dimensions, callouts, and architectural notes.
    - sku: Exact product/cabinet code as printed (e.g. "B36 1TD BUTT", "SB33", "W2130R", "BT36B-2", "24W4827", "DEP1W"). Preserve exact characters without merging.
+   - MULTI-LINE SKU CODES: Cabinet labels in floor plans and elevations sometimes split across
+     adjacent text blocks — a base code on one line and a suffix on the next line or same line
+     (e.g. "W2442" followed immediately by "BP" forming "W2442BP", or "W1848" with "L" indicating
+     "W1848L"). When a code fragment immediately follows a cabinet code and looks like a recognized
+     suffix (orientation: L/R/LH/RH; configuration: BP=Blind Panel, FHD=Full Height Door, BHD=Both
+     Hand Door; numeric/alpha: any letters/digits that logically complete the SKU with no intervening
+     description text), treat them as ONE SKU: "W2442BP", "W1848L". Do NOT create a separate line
+     item for the suffix. If genuinely ambiguous, prefer a single combined SKU and note uncertainty.
    - TRIM AND MOULDING ITEMS ARE LINE ITEMS TOO: crown moulding, scribe, toekick, light rail, and
      any other trim/moulding callout with its own code (e.g. "Crown: MCV96 - 1", "Scribe: SM96 - 3")
      must be extracted with the exact same rigor as a full cabinet — same sku/quantity/position

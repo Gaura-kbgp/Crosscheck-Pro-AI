@@ -37,22 +37,29 @@ CRITICAL RULES FOR VISUAL EXTRACTION:
    on each item. Set the corresponding `_status` field to "INHERITED_EXPLICIT". If an individual
    item row explicitly shows a different value, use that instead with status "OBSERVED".
 
-5. TRIM AND MOULDING ITEMS:
+5. MULTI-LINE / SPLIT SKU LABELS:
+   Cabinet labels in drawings sometimes show a base code and a suffix in separate adjacent text
+   elements (e.g. "W2442" and "BP" close together forming "W2442BP", or "W1848" and "L" forming
+   "W1848L"). When you see a short suffix (orientation: L/R/LH/RH; configuration: BP=Blind Panel,
+   FHD/BHD=door types; or any letter/digit continuation) immediately adjacent to a cabinet code,
+   read them as ONE complete SKU. Do NOT report the suffix as a separate item.
+
+6. TRIM AND MOULDING ITEMS:
    Extract crown, scribe, toekick, light rail, and other trim codes with the same rigor as full
    cabinets — do not skip them because they are small or subordinate.
 
-6. SUB-SECTION AWARENESS:
+7. SUB-SECTION AWARENESS:
    A single display page can be split into named sub-sections (e.g. "Salt", "Dewdrop", "Drift"
    within Display 5). Each sub-section's callouts are separate physical products — do not collapse
    them even if the trim codes look identical. Tag each with its sub-section name in `position`.
 
-7. QUANTITIES:
+8. QUANTITIES:
    For SCHEDULE/ELEVATION view types, report the quantity exactly as printed next to the label.
    For FLOORPLAN view types, count the number of distinct physical instances visible in the plan
    ONLY when you can clearly distinguish them — if uncertain, set quantity = 1 and note the
    uncertainty in the `notes` field.
 
-8. SPECIES / CONSTRUCTION / DRAWER BOX:
+9. SPECIES / CONSTRUCTION / DRAWER BOX:
    Extract these from display headers or schedule columns if visible:
    - species: Wood species (e.g. "Maple", "Cherry", "MDF")
    - construction: Box construction (e.g. "Plywood", "Furniture Board")

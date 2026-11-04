@@ -117,7 +117,15 @@ def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]
     result = list(no_vt)
     for group in vt_groups.values():
         max_p = max(_VIEW_TYPE_PRIORITY.get((i.source_metadata or {}).get("view_type", ""), 0) for i in group)
-        result.extend(i for i in group if _VIEW_TYPE_PRIORITY.get((i.source_metadata or {}).get("view_type", ""), 0) == max_p)
+        same_prio = [i for i in group if _VIEW_TYPE_PRIORITY.get((i.source_metadata or {}).get("view_type", ""), 0) == max_p]
+        # Within the same view_type at max priority, prefer items with explicit
+        # finish/door_style over blank ones — the same cabinet sometimes appears
+        # on multiple pages (e.g. in a schedule table AND a floorplan overview),
+        # and only some of those instances have finish inherited from the display
+        # header. Keeping the blank-finish instance alongside the explicit one
+        # creates two aggregate groups for the same SKU → AMBIGUOUS_DUPLICATE.
+        with_finish = [i for i in same_prio if (i.finish or "").strip() or (i.door_style or "").strip()]
+        result.extend(with_finish if with_finish else same_prio)
     return result
 
 
