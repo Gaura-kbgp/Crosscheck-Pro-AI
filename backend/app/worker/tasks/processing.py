@@ -19,7 +19,7 @@ import uuid
 # (new prompt safety rules, page evidence, OCR/reconciliation, etc). Combined
 # with document_hash + provider + model + prompt_version, this is the
 # identity used to decide whether a prior extraction can be safely reused.
-EXTRACTION_VERSION = "f8.3.3"
+EXTRACTION_VERSION = "f8.3.4"
 
 
 def _get_db():
@@ -385,6 +385,11 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     canonical.door_style = item.get("door_style")
                     canonical.door_style_status = item.get("door_style_status")
                     canonical.modifications = item.get("modifications")
+                    source_meta["species"] = item.get("species")
+                    source_meta["construction"] = item.get("construction")
+                    source_meta["drawer_box"] = item.get("drawer_box")
+                    source_meta["view_type"] = item.get("view_type")
+                    source_meta["position"] = item.get("position")
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ORDER":
                     canonical.finish = item.get("finish")
@@ -392,6 +397,9 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     canonical.door_style = item.get("door_style")
                     canonical.door_style_status = item.get("door_style_status")
                     canonical.modifications = item.get("modifications")
+                    source_meta["species"] = item.get("species")
+                    source_meta["construction"] = item.get("construction")
+                    source_meta["drawer_box"] = item.get("drawer_box")
                     source_meta["line_number"] = item.get("line_number")
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ACKNOWLEDGEMENT":
@@ -405,6 +413,9 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     canonical.backorder = item.get("backorder")
                     canonical.changed_item = item.get("changed_item")
                     canonical.manufacturer_reference = item.get("manufacturer_reference")
+                    source_meta["species"] = item.get("species")
+                    source_meta["construction"] = item.get("construction")
+                    source_meta["drawer_box"] = item.get("drawer_box")
                     # P2-2: the manufacturer's own acknowledgement line number is
                     # what a dealer needs to reference when forwarding a
                     # discrepancy report back to the manufacturer — was only

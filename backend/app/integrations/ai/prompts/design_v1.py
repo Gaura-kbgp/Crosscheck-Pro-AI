@@ -36,6 +36,24 @@ CRITICAL EXTRACTION RULES:
    - description: Text title or description if provided near the item label.
    - quantity: Integer count of this item represented on the drawing or schedule.
    - dimensions: Extract structured dimensions (width, height, depth) ONLY when explicitly printed or labeled. If not specified, leave as null. NEVER invent missing dimensions.
+   - view_type: Classify where you found this item in the drawing. Use one of: "FLOORPLAN" (top-down
+     plan view showing cabinet outlines from above), "ELEVATION" (front-view wall elevation showing
+     cabinet faces), "SCHEDULE" (a table or legend listing SKUs with counts — most reliable source
+     for quantities), or "LEGEND" (a finish/color legend, not a product callout — these should rarely
+     produce line items). When a page contains both a floorplan and an elevation, label items from each
+     area accordingly. If genuinely unclear, leave null.
+   - QUANTITY RECONCILIATION — do NOT double-count: A cabinet that appears in BOTH a floorplan view
+     AND an elevation view on the same or adjacent pages is ONE physical cabinet seen from two angles.
+     Extract it ONCE. When the same SKU appears in both views, prefer the ELEVATION or SCHEDULE
+     version (more reliable for exact count). Only emit multiple line items for the same SKU when
+     they are genuinely different physical instances (different positions on the floor plan OR different
+     wall elevations — e.g. B36 on the left wall vs B36 on the right wall of the same display).
+   - species: Wood species if stated for this item or its display (e.g. "Maple", "Cherry", "Birch",
+     "MDF"). Carry down from display header to all items in that display if stated once at the header.
+   - construction: Cabinet box construction type if stated (e.g. "Plywood", "Furniture Board",
+     "Solid Wood", "MDF"). Carry down from display header same as finish.
+   - drawer_box: Drawer box type/material if stated (e.g. "Dovetail", "Dowel", "Undermount",
+     "Soft-Close", "Blum"). Carry down from display header same as finish.
    - finish / door_style / color: A display/elevation almost always states its door style and finish
      ONCE, at the header/title-block level for that display (e.g. a schedule row "DOOR STYLE | MONROE"
      / "FINISH | SAGEWOOD/PHW ...", or prose like "Selections shown: Monroe; Sagewood/PHW"), rather

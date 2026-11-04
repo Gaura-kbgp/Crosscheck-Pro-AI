@@ -20,6 +20,12 @@ CRITICAL INSTRUCTIONS:
    - description: Item description text.
    - quantity: Exact integer quantity requested.
    - dimensions: Extract dimensions if explicitly provided (e.g. {"width": 36, "height": 34.5, "depth": 24} or {"width": "12 W"}).
+   - species: Wood species if stated for this order or section (e.g. "Maple", "Cherry", "Birch",
+     "MDF"). Carry down from section header to all rows in that section.
+   - construction: Cabinet box construction type if stated in this PO (e.g. "Plywood", "Furniture
+     Board"). Carry down from section header.
+   - drawer_box: Drawer box type if stated (e.g. "Dovetail", "Soft-Close", "Blum"). Carry down from
+     section header.
    - finish / door_style: Extract finish, door style, and color specifications. A PO table sometimes
      states door style/finish once in a header/title block for a whole section rather than on every
      row — when that is the case, fill `finish`/`door_style` on every row in that section with the

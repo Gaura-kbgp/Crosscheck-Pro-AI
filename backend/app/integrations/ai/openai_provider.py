@@ -47,6 +47,7 @@ from app.core.config import settings
 from app.integrations.ai.base import AIProvider
 from app.engines.reconciliation import reconcile_items
 from app.integrations.ai.prompts.spec_book_v1 import SPEC_BOOK_PROMPT_V1
+from app.integrations.ai.prompts.design_vision_v1 import DESIGN_VISION_PROMPT_V1
 from app.schemas.extraction import SpecBookCodeExtraction
 
 
@@ -353,16 +354,22 @@ class OpenAIProvider(AIProvider):
         schema_json: Dict[str, Any],
         system_prompt: str,
         batch_size: int = 6,
+        dpi: int = 150,
+        vision_prompt_override: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Renders every PDF page to an image and extracts items via Vision,
         batched the same way as the scanned-PDF pass below, so drawing-only
         content (labels that exist as graphics, not text) can still be read.
+        vision_prompt_override replaces prompt for the Vision call only —
+        used for DESIGN docs to pass a visually-tailored prompt without
+        changing the text-pass prompt that shares the same schema.
         """
         if not fitz:
             return []
         doc_fitz = fitz.open(stream=file_bytes, filetype="pdf")
         total_pages = len(doc_fitz)
+        effective_prompt = vision_prompt_override or prompt
         items: List[Dict[str, Any]] = []
         for batch_start in range(0, total_pages, batch_size):
             batch_end = min(batch_start + batch_size, total_pages)
@@ -370,7 +377,7 @@ class OpenAIProvider(AIProvider):
                 {
                     "type": "text",
                     "text": (
-                        f"{prompt}\n\n"
+                        f"{effective_prompt}\n\n"
                         f"Analyzing document pages {batch_start + 1} to {batch_end} of {total_pages} "
                         f"as images. Read any labels, callouts or codes that appear only as drawing "
                         f"graphics, not as selectable text.\n"
@@ -381,7 +388,7 @@ class OpenAIProvider(AIProvider):
             ]
             for pno in range(batch_start, batch_end):
                 page = doc_fitz[pno]
-                pix = page.get_pixmap(dpi=150)
+                pix = page.get_pixmap(dpi=dpi)
                 img_bytes = pix.tobytes("jpeg")
                 b64 = base64.b64encode(img_bytes).decode("utf-8")
                 batch_content.append({
@@ -492,7 +499,11 @@ class OpenAIProvider(AIProvider):
                 # aren't silently dropped (brief §4: native text presence
                 # does not mean drawing labels were extracted completely).
                 if doc_type == "DESIGN" and self.client:
-                    vision_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt)
+                    vision_items = self._vision_batch_extract(
+                        file_bytes, prompt, schema_json, system_prompt,
+                        dpi=200,
+                        vision_prompt_override=DESIGN_VISION_PROMPT_V1,
+                    )
                     # The text and Vision passes frequently both see the SAME
                     # physical item (whatever is in the text layer is also
                     # visible on the rendered page) — merge same-SKU/same-page

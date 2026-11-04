@@ -15,6 +15,9 @@ CRITICAL INSTRUCTIONS:
    - description: Item description text.
    - quantity: Confirmed quantity.
    - dimensions: Acknowledged dimensions.
+   - species: Wood species if stated for this acknowledgement or section. Carry down from header.
+   - construction: Cabinet box construction type if stated. Carry down from header.
+   - drawer_box: Drawer box type if stated. Carry down from header.
    - finish / door_style: An acknowledgement almost always states its door style and finish ONCE,
      at the header/title-block level for the whole order or for each display section within it
      (e.g. "Monroe / Sagewood / PHW", "Door Style: Monroe", "Finish: Sagewood"), rather than

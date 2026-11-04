@@ -75,6 +75,9 @@ class CrossCheckEngine:
             "dimensions": Severity.WARNING,
             "finish": Severity.WARNING,
             "door_style": Severity.WARNING,
+            "species": Severity.WARNING,
+            "construction": Severity.WARNING,
+            "drawer_box": Severity.WARNING,
             "modifications": Severity.WARNING,
             "price": Severity.INFO,
             "notes": Severity.INFO
@@ -365,6 +368,45 @@ class CrossCheckEngine:
                 Severity.WARNING,
                 f"Door style changed: Order specifies '{mg.order_item.door_style}', but Acknowledgement specifies '{mg.ack_item.door_style}'"
             ))
+
+        # =============================================================
+        # 6. Species / Construction / Drawer Box Comparison
+        # =============================================================
+        def _meta(item: Optional[CanonicalLineItem], key: str) -> Optional[str]:
+            if not item:
+                return None
+            meta = getattr(item, "source_metadata", None) or {}
+            val = meta.get(key)
+            return normalize_text(str(val)) if val else None
+
+        for spec_field, label in (("species", "Species"), ("construction", "Construction"), ("drawer_box", "Drawer box")):
+            d_val = _meta(mg.design_item, spec_field)
+            o_val = _meta(mg.order_item, spec_field)
+            a_val = _meta(mg.ack_item, spec_field)
+
+            def _raw(item, key):
+                if not item:
+                    return None
+                return ((item.source_metadata or {}).get(key))
+
+            if d_val is not None and o_val is not None and d_val != o_val:
+                discrepancies.append(self._create_discrepancy(
+                    mg, project_id, organization_id, spec_field,
+                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.order_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
+                    {"expected": _raw(mg.design_item, spec_field), "actual": _raw(mg.order_item, spec_field)},
+                    DocumentType.ORDER,
+                    Severity.WARNING,
+                    f"{label} changed: Design specifies '{_raw(mg.design_item, spec_field)}', but Order specifies '{_raw(mg.order_item, spec_field)}'"
+                ))
+            elif o_val is not None and a_val is not None and o_val != a_val:
+                discrepancies.append(self._create_discrepancy(
+                    mg, project_id, organization_id, spec_field,
+                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.order_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
+                    {"expected": _raw(mg.order_item, spec_field), "actual": _raw(mg.ack_item, spec_field)},
+                    DocumentType.ACKNOWLEDGEMENT,
+                    Severity.WARNING,
+                    f"{label} changed: Order specifies '{_raw(mg.order_item, spec_field)}', but Acknowledgement specifies '{_raw(mg.ack_item, spec_field)}'"
+                ))
 
         return discrepancies
 

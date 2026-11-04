@@ -67,6 +67,10 @@ class DesignExtractionItem(BaseModel):
     finish_status: Optional[str] = None
     door_style: Optional[str] = None
     door_style_status: Optional[str] = None
+    species: Optional[str] = None
+    construction: Optional[str] = None
+    drawer_box: Optional[str] = None
+    view_type: Optional[str] = None
     color: Optional[str] = None
     modifications: Optional[List[str]] = None
     accessories: Optional[List[str]] = None
@@ -92,6 +96,9 @@ class OrderExtractionItem(BaseModel):
     finish_status: Optional[str] = None
     door_style: Optional[str] = None
     door_style_status: Optional[str] = None
+    species: Optional[str] = None
+    construction: Optional[str] = None
+    drawer_box: Optional[str] = None
     modifications: Optional[List[str]] = None
     accessories: Optional[List[str]] = None
     notes: Optional[str] = None
@@ -114,6 +121,9 @@ class AcknowledgementExtractionItem(BaseModel):
     finish_status: Optional[str] = None
     door_style: Optional[str] = None
     door_style_status: Optional[str] = None
+    species: Optional[str] = None
+    construction: Optional[str] = None
+    drawer_box: Optional[str] = None
     price: Optional[str] = None
     ack_status: Optional[str] = None
     substitution_sku: Optional[str] = None
