@@ -313,6 +313,7 @@ class OpenAIProvider(AIProvider):
         schema_json: Dict[str, Any],
         system_prompt: str,
         _usage: Optional[List] = None,
+        model: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Extracts items for a page-group via text. A page GROUP can still
@@ -324,14 +325,17 @@ class OpenAIProvider(AIProvider):
         dropping that batch's items (the original failure this project
         reported: "Expecting value: line N column M" from a truncated
         response).
+        model overrides self.model_name for this call only — used by O2 to
+        send ORDER/ACK text batches through gpt-4o-mini.
         """
         import re
         batch_text = "\n\n".join(f"--- PAGE {p['page_number']} ---\n{p['raw_text']}" for p in batch_pages)
         if not re.sub(r"--- PAGE \d+ ---", "", batch_text).strip():
             return []
 
+        _model = model or self.model_name
         response = self.client.chat.completions.create(
-            model=self.model_name,
+            model=_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": [{
@@ -354,6 +358,7 @@ class OpenAIProvider(AIProvider):
             "text_batch", response,
             page_start=batch_pages[0]["page_number"],
             page_end=batch_pages[-1]["page_number"],
+            model_override=_model,
         )
         if _rec and _usage is not None:
             _usage.append(_rec)
@@ -369,8 +374,8 @@ class OpenAIProvider(AIProvider):
         if truncated and len(batch_pages) > 1:
             mid = len(batch_pages) // 2
             return (
-                self._extract_text_pages(batch_pages[:mid], total_pages, prompt, schema_json, system_prompt, _usage)
-                + self._extract_text_pages(batch_pages[mid:], total_pages, prompt, schema_json, system_prompt, _usage)
+                self._extract_text_pages(batch_pages[:mid], total_pages, prompt, schema_json, system_prompt, _usage, model)
+                + self._extract_text_pages(batch_pages[mid:], total_pages, prompt, schema_json, system_prompt, _usage, model)
             )
         if truncated:
             # Single page still truncated/unparsable — nothing smaller to
@@ -616,11 +621,21 @@ class OpenAIProvider(AIProvider):
                 # (observed failure: "Expecting value: line N column M" from
                 # a truncated response on large multipage documents).
                 TEXT_BATCH_SIZE = 6
+                # O2: ORDER and ACK are structured text documents; mini model
+                # handles them well at ~20x lower cost. Gate: flag must be set
+                # explicitly — default False preserves prior behaviour.
+                # shortcut: cache key uses provider.model_name, not the per-call
+                # model; toggling OPENAI_USE_MINI_FOR_TEXT requires force_reprocess.
+                _use_mini = (
+                    self.use_mini_for_text
+                    and doc_type in ("ORDER", "ACKNOWLEDGEMENT")
+                )
+                _text_model: Optional[str] = self.mini_model_name if _use_mini else None
                 merged_items: List[Dict[str, Any]] = []
                 for batch_start in range(0, len(page_evidence), TEXT_BATCH_SIZE):
                     batch_pages = page_evidence[batch_start:batch_start + TEXT_BATCH_SIZE]
                     merged_items.extend(
-                        self._extract_text_pages(batch_pages, len(page_evidence), prompt, schema_json, system_prompt, _usage)
+                        self._extract_text_pages(batch_pages, len(page_evidence), prompt, schema_json, system_prompt, _usage, _text_model)
                     )
 
                 # DESIGN documents (floor plans / elevations) often carry the
