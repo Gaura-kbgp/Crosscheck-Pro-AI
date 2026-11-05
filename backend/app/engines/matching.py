@@ -129,6 +129,7 @@ def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]
         # Inherit finish/door_style from dropped lower-priority items when winner
         # has none. Never delete an occurrence simply because another has a finish.
         dropped = [i for i in group if i not in winners]
+        dropped_fps = [i for i in dropped if (i.source_metadata or {}).get("view_type") == "FLOORPLAN"]
         for w in winners:
             if not (w.finish or "").strip():
                 for d in dropped:
@@ -140,6 +141,12 @@ def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]
                     if (d.door_style or "").strip():
                         w.door_style = d.door_style
                         break
+            # FLOORPLAN sees all positions from above; ELEVATION only the visible face.
+            # When ELEVATION wins for specs, prefer the FLOORPLAN count if it's higher.
+            if dropped_fps:
+                fp_qty = max((i.quantity or 0) for i in dropped_fps)
+                if fp_qty > (w.quantity or 0):
+                    w.quantity = fp_qty
         result.extend(winners)
     return result
 

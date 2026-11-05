@@ -188,14 +188,15 @@ def _vt_item(sku, qty, view_type, position, finish=None):
 
 
 def test_elevation_wins_over_floorplan_same_display():
-    # B24BP: Display 4 FLOORPLAN qty=3, ELEVATION qty=2 → keep ELEVATION
+    # B24BP: Display 4 FLOORPLAN qty=3, ELEVATION qty=2 → keep ELEVATION specs, FLOORPLAN count
     items = [
         _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
         _vt_item("B24BP", 2, "ELEVATION", "Display 4: Island - Front"),
     ]
     result = _dedup_view_types(items)
     assert len(result) == 1
-    assert result[0].quantity == 2
+    assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
+    assert result[0].quantity == 3  # FLOORPLAN count is authoritative; ELEVATION shows partial face
 
 
 def test_different_displays_not_deduplicated():
@@ -226,6 +227,19 @@ def test_no_view_type_passthrough():
     )
     result = _dedup_view_types([item])
     assert len(result) == 1
+
+
+def test_elevation_winner_inherits_qty_from_floorplan():
+    # Island: ELEVATION shows 1 front-visible B24BP, FLOORPLAN shows all 3.
+    # Dedup keeps ELEVATION (specs) but must use FLOORPLAN count.
+    items = [
+        _vt_item("B24BP", 1, "ELEVATION", "Display 4: Island - Front"),
+        _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert result[0].quantity == 3
+    assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
 
 
 def test_elevation_winner_inherits_finish_from_dropped_floorplan():
