@@ -17,7 +17,7 @@ class GeminiProvider(AIProvider):
         self.client = None
         if settings.GEMINI_API_KEY and genai:
             self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        self.model_name = getattr(settings, "GEMINI_MODEL", None) or "gemini-1.5-flash"
+        self.model_name = getattr(settings, "GEMINI_MODEL", None) or "gemini-2.5-flash"
 
     def extract_structured_data(
         self,

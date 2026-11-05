@@ -84,6 +84,8 @@ class OpenAIProvider(AIProvider):
         "gpt-4.1-mini":     {"input": 0.40,  "output": 1.60},
         "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
         "gemini-2.0-flash": {"input": 0.10,  "output": 0.40},
+        "gemini-2.5-flash": {"input": 0.15,  "output": 0.60},
+        "gemini-3.8-flash": {"input": 0.15,  "output": 0.60},
     }
 
     def _make_usage_record(
