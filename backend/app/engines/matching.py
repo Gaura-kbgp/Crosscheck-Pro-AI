@@ -46,7 +46,13 @@ class CanonicalMatchingUnit:
                 has_qty = True
                 total_qty += item.quantity
         self.aggregate_quantity = total_qty if has_qty else None
-        
+        # When dedup annotated a quantity_resolution (FLOORPLAN vs ELEVATION),
+        # use the evidence-based resolved_quantity instead of the raw winner qty.
+        if len(raw_items) == 1:
+            qr = (raw_items[0].source_metadata or {}).get("quantity_resolution") or {}
+            if qr.get("resolved_quantity") is not None:
+                self.aggregate_quantity = qr["resolved_quantity"]
+
         # Attach aggregate info to primary item non-destructively for downstream engines
         self.primary_item.aggregate_quantity = self.aggregate_quantity
         if not self.primary_item.source_metadata:
@@ -141,12 +147,36 @@ def _dedup_view_types(items: List[CanonicalLineItem]) -> List[CanonicalLineItem]
                     if (d.door_style or "").strip():
                         w.door_style = d.door_style
                         break
-            # FLOORPLAN sees all positions from above; ELEVATION only the visible face.
-            # When ELEVATION wins for specs, prefer the FLOORPLAN count if it's higher.
+            # Quantity resolution: compare FLOORPLAN vs winner counts; store evidence
+            # but do NOT overwrite the original extracted quantity.
+            # FLOORPLAN sees all positions from above; ELEVATION sees only visible face.
             if dropped_fps:
                 fp_qty = max((i.quantity or 0) for i in dropped_fps)
-                if fp_qty > (w.quantity or 0):
-                    w.quantity = fp_qty
+                fp_pages = [
+                    str((i.source_metadata or {}).get("page_number") or "")
+                    for i in dropped_fps
+                    if (i.source_metadata or {}).get("page_number")
+                ]
+                w_vt = (w.source_metadata or {}).get("view_type", "ELEVATION")
+                w_qty = w.quantity or 0
+                if fp_qty > w_qty:
+                    resolved, method, confidence, qty_src = fp_qty, "floorplan_higher_inferred", "INFERRED", "FLOORPLAN"
+                elif fp_qty == w_qty:
+                    resolved, method, confidence, qty_src = fp_qty, "views_agree", "HIGH", "AGREED"
+                else:  # elevation shows more than floorplan — unusual, flag for review
+                    resolved, method, confidence, qty_src = w_qty, "elevation_higher_flagged", "NEEDS_REVIEW", w_vt
+                qr: Dict[str, Any] = {
+                    "resolved_quantity": resolved,
+                    "quantity_source": qty_src,
+                    "resolution_method": method,
+                    "confidence_status": confidence,
+                    "conflicting_views": {w_vt: w_qty, "FLOORPLAN": fp_qty},
+                }
+                if fp_pages:
+                    qr["floorplan_pages"] = fp_pages
+                new_meta = dict(w.source_metadata or {})
+                new_meta["quantity_resolution"] = qr
+                w.source_metadata = new_meta
         result.extend(winners)
     return result
 

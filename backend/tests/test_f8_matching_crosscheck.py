@@ -188,7 +188,8 @@ def _vt_item(sku, qty, view_type, position, finish=None):
 
 
 def test_elevation_wins_over_floorplan_same_display():
-    # B24BP: Display 4 FLOORPLAN qty=3, ELEVATION qty=2 → keep ELEVATION specs, FLOORPLAN count
+    # B24BP: FLOORPLAN qty=3, ELEVATION qty=2.
+    # Dedup keeps ELEVATION (specs). Original qty=2 preserved; resolved_quantity=3 in metadata.
     items = [
         _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
         _vt_item("B24BP", 2, "ELEVATION", "Display 4: Island - Front"),
@@ -196,7 +197,10 @@ def test_elevation_wins_over_floorplan_same_display():
     result = _dedup_view_types(items)
     assert len(result) == 1
     assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
-    assert result[0].quantity == 3  # FLOORPLAN count is authoritative; ELEVATION shows partial face
+    assert result[0].quantity == 2  # original ELEVATION qty preserved
+    qr = (result[0].source_metadata or {}).get("quantity_resolution", {})
+    assert qr["resolved_quantity"] == 3
+    assert qr["confidence_status"] == "INFERRED"
 
 
 def test_different_displays_not_deduplicated():
@@ -229,17 +233,58 @@ def test_no_view_type_passthrough():
     assert len(result) == 1
 
 
-def test_elevation_winner_inherits_qty_from_floorplan():
+def test_qty_resolution_floorplan_higher():
     # Island: ELEVATION shows 1 front-visible B24BP, FLOORPLAN shows all 3.
-    # Dedup keeps ELEVATION (specs) but must use FLOORPLAN count.
+    # Original qty=1 preserved; resolved_quantity=3 (INFERRED) stored in metadata.
     items = [
         _vt_item("B24BP", 1, "ELEVATION", "Display 4: Island - Front"),
         _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
     ]
     result = _dedup_view_types(items)
     assert len(result) == 1
-    assert result[0].quantity == 3
-    assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
+    assert result[0].quantity == 1  # original preserved
+    qr = (result[0].source_metadata or {}).get("quantity_resolution", {})
+    assert qr["resolved_quantity"] == 3
+    assert qr["confidence_status"] == "INFERRED"
+    assert qr["resolution_method"] == "floorplan_higher_inferred"
+
+
+def test_qty_resolution_views_agree():
+    items = [
+        _vt_item("W2442BP", 2, "ELEVATION", "Display 1: Kitchen"),
+        _vt_item("W2442BP", 2, "FLOORPLAN", "Display 1: Kitchen"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert result[0].quantity == 2
+    qr = (result[0].source_metadata or {}).get("quantity_resolution", {})
+    assert qr["resolved_quantity"] == 2
+    assert qr["confidence_status"] == "HIGH"
+
+
+def test_qty_resolution_elevation_higher_needs_review():
+    # Unusual: ELEVATION shows more than FLOORPLAN → NEEDS_REVIEW; keep ELEVATION qty
+    items = [
+        _vt_item("W1218", 3, "ELEVATION", "Display 2: Wall"),
+        _vt_item("W1218", 1, "FLOORPLAN", "Display 2: Wall"),
+    ]
+    result = _dedup_view_types(items)
+    assert len(result) == 1
+    assert result[0].quantity == 3  # original preserved
+    qr = (result[0].source_metadata or {}).get("quantity_resolution", {})
+    assert qr["resolved_quantity"] == 3
+    assert qr["confidence_status"] == "NEEDS_REVIEW"
+
+
+def test_canonical_unit_uses_resolved_quantity():
+    from app.engines.matching import aggregate_document_items
+    items = [
+        _vt_item("B24BP", 1, "ELEVATION", "Display 4: Island - Front"),
+        _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island"),
+    ]
+    units = aggregate_document_items(items)
+    assert len(units) == 1
+    assert units[0].aggregate_quantity == 3  # resolved from FLOORPLAN evidence
 
 
 def test_elevation_winner_inherits_finish_from_dropped_floorplan():
@@ -253,6 +298,43 @@ def test_elevation_winner_inherits_finish_from_dropped_floorplan():
     assert len(result) == 1
     assert result[0].finish == "LAGOON ON PAINTED OAK"
     assert (result[0].source_metadata or {}).get("view_type") == "ELEVATION"
+
+
+def test_b24bp_elevation_1_floorplan_3_order_3_no_qty_discrepancy():
+    # Design has ELEVATION qty=1 and FLOORPLAN qty=3. ORDER has 3.
+    # resolved_quantity=3 (INFERRED) → matched, no qty discrepancy.
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+    d_fp = _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island")
+    d_el = _vt_item("B24BP", 1, "ELEVATION", "Display 4: Island - Front")
+    o = CanonicalLineItem(
+        id=uuid4(), project_id=proj_id, organization_id=org_id,
+        source_type=DocumentType.ORDER, raw_sku="B24BP", normalized_sku="B24BP", quantity=3,
+    )
+    groups = matcher.match_items([d_fp, d_el], [o], [], proj_id, org_id)
+    crosscheck = CrossCheckEngine()
+    discs = crosscheck.evaluate(groups, proj_id, org_id)
+    qty_discs = [d for d in discs if d.field == "quantity"]
+    assert len(qty_discs) == 0, f"Unexpected qty discrepancy: {[(d.design_value, d.order_value) for d in qty_discs]}"
+
+
+def test_b24bp_elevation_1_floorplan_3_order_2_has_qty_discrepancy():
+    # resolved_quantity=3, ORDER=2 → real CHANGED qty discrepancy must be surfaced
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+    d_fp = _vt_item("B24BP", 3, "FLOORPLAN", "Display 4: Island")
+    d_el = _vt_item("B24BP", 1, "ELEVATION", "Display 4: Island - Front")
+    o = CanonicalLineItem(
+        id=uuid4(), project_id=proj_id, organization_id=org_id,
+        source_type=DocumentType.ORDER, raw_sku="B24BP", normalized_sku="B24BP", quantity=2,
+    )
+    groups = matcher.match_items([d_fp, d_el], [o], [], proj_id, org_id)
+    crosscheck = CrossCheckEngine()
+    discs = crosscheck.evaluate(groups, proj_id, org_id)
+    qty_discs = [d for d in discs if d.field == "quantity"]
+    assert len(qty_discs) == 1
 
 
 def test_floorplan_elevation_match_no_false_missing():
