@@ -144,6 +144,18 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
+### 2026-11-05 (session 8c — O1 Vision gate)
+- **O1 — Vision gate** (`backend/app/integrations/ai/openai_provider.py`): `_vision_pages_needed(page_evidence, text_items) -> Optional[set]` gates the DESIGN Vision pass to pages that actually need it.
+  - Page is flagged when: EMPTY status (no embedded text), sparse text (< 3 blocks or < 80 chars), text pass extracted no items on the page, or any item on the page is missing a quantity.
+  - Returns `None` when no page evidence is available → falls back to Vision on all pages (safe default, same as before).
+  - `_vision_batch_extract` now accepts `page_numbers: Optional[set]`; batches with no flagged pages are skipped entirely; empty set = zero Vision API calls.
+  - DESIGN text path calls `_vision_pages_needed(page_evidence, merged_items)` after the text pass and passes result to `_vision_batch_extract`.
+  - Expected savings: ~75–85% fewer Vision API calls per typical DESIGN document (most pages have good text extraction; only 3–5 drawing-only pages need Vision).
+- **`EXTRACTION_VERSION` bumped `f8.3.5` → `f8.3.6`**: Vision pages per document may now differ from prior runs; cached extractions at f8.3.5 are intentionally invalidated.
+- **10 regression tests** in `tests/test_o1_vision_gate.py`. 506 tests pass.
+- **Pending — O2** (gpt-4o-mini for ORDER/ACK): config wired (`OPENAI_USE_MINI_FOR_TEXT`), but requires OpenAI credits to compare quality before enabling.
+- **Pending — DB migration**: `d4e9b2f7c831` (add `api_usage` column) exists but has not been applied to production. Run `python -m alembic upgrade head` in `backend/`.
+
 ### 2026-11-05 (session 8b — O3+O4 cost optimization: token tracking + Gemini fallback)
 - **O3 — API usage tracking** (`backend/app/integrations/ai/openai_provider.py`, `gemini.py`, `processing.py`, `models/core.py`):
   - New `api_usage` JSONB column on `Extraction` (Alembic migration `d4e9b2f7c831`). Separate from `confidence` (quality) and `raw_data` (items).
@@ -153,14 +165,12 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
   - `extract_structured_data` returns `_api_usage` key: `{provider, calls[], total_input_tokens, total_output_tokens, total_estimated_cost_usd}`.
   - `GeminiProvider` captures `response.usage_metadata` and returns same `_api_usage` structure.
   - `processing.py` pops `_api_usage` from `raw_data` (like `_page_evidence`) and saves to `Extraction.api_usage`.
+  - 24-test O3+O4 verification suite in `tests/test_o3_o4_verification.py`.
 - **O4 — Gemini fallback wired** (`backend/app/integrations/ai/factory.py`, `gemini.py`):
   - Fixed broken model name: was hardcoded `gemini-3.6-flash` (non-existent model), now reads `settings.GEMINI_MODEL` (default `gemini-1.5-flash`).
   - `factory.py` now creates `GeminiProvider()` as `_secondary` when both `OPENAI_API_KEY` and `GEMINI_API_KEY` are set. Previously always `None`.
-  - `test_ai_providers.py` updated: existing test asserts `GeminiProvider` secondary (not None); new test covers OpenAI-only path (no Gemini key).
+  - `test_ai_providers.py` updated: existing test asserts `GeminiProvider` secondary (not None); new test covers OpenAI-only path.
 - **Config additions** (`backend/app/core/config.py`): `GEMINI_MODEL`, `OPENAI_MINI_MODEL`, `OPENAI_USE_MINI_FOR_TEXT` added to `Settings`.
-- **472 tests pass** (excluding `test_processing.py` per known deadlock).
-- **O1 — Vision gate** (`backend/app/integrations/ai/openai_provider.py`): `_vision_pages_needed(page_evidence, text_items) -> Optional[set]` added. A page is flagged for Vision when: EMPTY status, sparse text (< 3 blocks or < 80 chars), no items extracted, or any item missing quantity. `_vision_batch_extract` now accepts `page_numbers: Optional[set]`; empty set skips Vision entirely. DESIGN text path calls the gate after the text pass and passes the result. `EXTRACTION_VERSION` bumped to `f8.3.6`. 10 regression tests.
-- **Pending — O2** (gpt-4o-mini for ORDER/ACK): config wired (`OPENAI_USE_MINI_FOR_TEXT`), but comparison requires OpenAI credits to validate quality before enabling.
 
 ### 2026-11-05 (session 8a — NEEDS_REVIEW surfacing + final safety audit)
 - **NEEDS_REVIEW surfaced in CrossCheckEngine** (`backend/app/engines/crosscheck.py`): Before the standard quantity comparison block in `_evaluate_match_group`, added a check for `source_metadata["quantity_resolution"]["confidence_status"] == "NEEDS_REVIEW"`. When present, emits a `quantity_resolution` field discrepancy (severity WARNING) with `source_values` containing `design_raw`, `resolved_quantity`, `order`, `acknowledgement`, `conflicting_views`, and `resolution_confidence`. Groups with ELEVATION > FLOORPLAN quantity can no longer silently appear as MATCHED.
