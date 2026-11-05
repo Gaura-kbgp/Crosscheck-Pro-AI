@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o"
     OPENAI_MINI_MODEL: str = "gpt-4o-mini"
     OPENAI_USE_MINI_FOR_TEXT: bool = False
+    OPENAI_USE_MINI_FOR_DESIGN_TEXT: bool = False
     
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"

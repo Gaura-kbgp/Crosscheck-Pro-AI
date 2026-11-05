@@ -76,6 +76,10 @@ export function ProcessingStatusCard({
     rawErrorStr.includes("prepayment credits") ||
     rawErrorStr.includes("429");
   const isNoDocumentsError = rawErrorStr.toLowerCase().includes("no documents found");
+  const isCancelledError =
+    rawErrorStr.toLowerCase().includes("cancelled by user") ||
+    rawErrorStr.toLowerCase().includes("canceled by user") ||
+    rawErrorStr.toLowerCase().includes("revoked");
 
   return (
     <div
@@ -251,6 +255,13 @@ export function ProcessingStatusCard({
               <p className="text-slate-600 mt-1 leading-relaxed">
                 The previous run failed because Google Gemini API quota was exhausted. The backend has now been switched to OpenAI.
                 Please ensure you have provided your <code className="bg-slate-100 px-1 py-0.5 rounded text-[#0F2747] font-mono">OPENAI_API_KEY</code> in <code className="bg-slate-100 px-1 py-0.5 rounded text-[#0F2747] font-mono">backend/.env</code> and click <strong>Retry with OpenAI GPT-4o</strong> above.
+              </p>
+            </div>
+          ) : isCancelledError ? (
+            <div>
+              <p className="font-bold text-slate-800">Processing was cancelled</p>
+              <p className="text-slate-600 mt-1 leading-relaxed">
+                The previous run was stopped before it could finish. Click <strong>Retry with OpenAI GPT-4o</strong> to start again.
               </p>
             </div>
           ) : (

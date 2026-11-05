@@ -74,6 +74,7 @@ class OpenAIProvider(AIProvider):
         self.model_name = settings.OPENAI_MODEL or "gpt-4o"
         self.mini_model_name = getattr(settings, "OPENAI_MINI_MODEL", "gpt-4o-mini")
         self.use_mini_for_text = bool(getattr(settings, "OPENAI_USE_MINI_FOR_TEXT", False))
+        self.use_mini_for_design_text = bool(getattr(settings, "OPENAI_USE_MINI_FOR_DESIGN_TEXT", False))
 
     # Published pricing per 1M tokens (Nov 2025). Kept as a lookup so a model
     # rename in settings.OPENAI_MODEL doesn't silently produce $0 cost records.
@@ -623,14 +624,14 @@ class OpenAIProvider(AIProvider):
                 # (observed failure: "Expecting value: line N column M" from
                 # a truncated response on large multipage documents).
                 TEXT_BATCH_SIZE = 6
-                # O2: ORDER and ACK are structured text documents; mini model
-                # handles them well at ~20x lower cost. Gate: flag must be set
-                # explicitly — default False preserves prior behaviour.
-                # shortcut: cache key uses provider.model_name, not the per-call
-                # model; toggling OPENAI_USE_MINI_FOR_TEXT requires force_reprocess.
+                # O2: ORDER/ACK and (optionally) DESIGN text batches can use
+                # mini model at ~20x lower cost. Vision calls always use
+                # self.model_name (gpt-4o) regardless of these flags.
+                # shortcut: cache key uses provider.model_name, not per-call
+                # model; toggling either flag requires force_reprocess.
                 _use_mini = (
-                    self.use_mini_for_text
-                    and doc_type in ("ORDER", "ACKNOWLEDGEMENT")
+                    (self.use_mini_for_text and doc_type in ("ORDER", "ACKNOWLEDGEMENT"))
+                    or (self.use_mini_for_design_text and doc_type == "DESIGN")
                 )
                 _text_model: Optional[str] = self.mini_model_name if _use_mini else None
                 merged_items: List[Dict[str, Any]] = []
