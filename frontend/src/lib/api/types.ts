@@ -321,6 +321,8 @@ export interface Document {
   updated_at: string;
 }
 
+export type DocumentResponse = Document;
+
 export interface ProcessingJobResponse {
   id: string;
   project_id: string;

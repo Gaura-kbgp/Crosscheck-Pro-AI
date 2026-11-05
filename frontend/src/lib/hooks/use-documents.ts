@@ -108,7 +108,7 @@ export function useStartProcessing(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (forceReprocess: boolean = false) => processingApi.start(projectId, forceReprocess),
+    mutationFn: (forceReprocess?: boolean) => processingApi.start(projectId, forceReprocess ?? false),
     onSuccess: (job: ProcessingJobResponse) => {
       queryClient.invalidateQueries({
         queryKey: PROJECT_KEYS.detail(projectId),

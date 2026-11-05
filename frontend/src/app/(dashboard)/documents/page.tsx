@@ -117,7 +117,7 @@ function DocumentsContent() {
   };
 
   const handleReprocessDoc = async () => {
-    await startProcessingMutation.mutateAsync();
+    await startProcessingMutation.mutateAsync(false);
     refetchDocs();
   };
 

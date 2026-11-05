@@ -536,20 +536,77 @@ class MatchingEngine:
                     status = MatchGroupStatus.MATCHED if (matched_o and not (matched_a and matched_a.substitution_sku)) else MatchGroupStatus.CHANGED
                     match_groups.append(_commit_match(d, matched_o, matched_a, status, "TIER_3_SKU_DISAMBIGUATION", 0.92, f"Disambiguated duplicate SKU by {disambiguated_by}"))
                 else:
-                    # Ambiguous duplicate: Abstain ALL competing candidate units to UNCERTAIN
+                    # Ambiguous duplicate: collect all competing units
                     all_competing_d = set(same_d_units)
                     if order_has_competing_d:
                         all_competing_d.update(comp_d_for_o)
                     if ack_has_competing_d:
                         all_competing_d.update(comp_d_for_a)
 
+                    remaining_orders = [o for o in cand_orders if o.id not in consumed_order]
+                    remaining_acks = [a for a in cand_acks if a.id not in consumed_ack]
+
+                    # Greedy rescue: DESIGN units with explicit finish/door style can be
+                    # disambiguated even when the triggering unit `d` could not.
+                    #
+                    # To prevent first-wins from resolving genuine ambiguity:
+                    #   Phase 1 — compute every unit's best ORDER/ACK proposal against a
+                    #             snapshot (no consumption yet). Sort by (token count DESC,
+                    #             id ASC) for full determinism across equal-richness tiers.
+                    #   Phase 2 — flag ORDER/ACK items claimed by >1 DESIGN unit as
+                    #             contested; both sides fall through to UNCERTAIN.
+                    #   Phase 3 — commit only uncontested matches.
+                    rescue_candidates = sorted(
+                        [cd for cd in all_competing_d
+                         if cd.id not in consumed_design and _config_tokens(cd)],
+                        key=lambda cd: (len(_config_tokens(cd)), str(cd.id)),
+                        reverse=True,
+                    )
+
+                    proposals: Dict[Any, Tuple[Optional["CanonicalMatchingUnit"], Optional["CanonicalMatchingUnit"]]] = {}
+                    for comp_d in rescue_candidates:
+                        proposals[comp_d.id] = (
+                            _best_config_match(comp_d, remaining_orders),
+                            _best_config_match(comp_d, remaining_acks),
+                        )
+
+                    o_claimants: Dict[Any, List] = {}
+                    a_claimants: Dict[Any, List] = {}
+                    for comp_d in rescue_candidates:
+                        best_o, best_a = proposals[comp_d.id]
+                        if best_o:
+                            o_claimants.setdefault(best_o.id, []).append(comp_d)
+                        if best_a:
+                            a_claimants.setdefault(best_a.id, []).append(comp_d)
+
+                    contested_d_ids: Set[Any] = set()
+                    for claimants in o_claimants.values():
+                        if len(claimants) > 1:
+                            contested_d_ids.update(cd.id for cd in claimants)
+                    for claimants in a_claimants.values():
+                        if len(claimants) > 1:
+                            contested_d_ids.update(cd.id for cd in claimants)
+
+                    for comp_d in rescue_candidates:
+                        if comp_d.id in contested_d_ids or comp_d.id in consumed_design:
+                            continue
+                        best_o, best_a = proposals[comp_d.id]
+                        if best_o or best_a:
+                            st = MatchGroupStatus.MATCHED if (best_o and not (best_a and best_a.substitution_sku)) else MatchGroupStatus.CHANGED
+                            match_groups.append(_commit_match(comp_d, best_o, best_a, st, "TIER_3_SKU_DISAMBIGUATION", 0.92, "Disambiguated duplicate SKU by finish/door style"))
+                            if best_o:
+                                remaining_orders = [o for o in remaining_orders if o.id != best_o.id]
+                            if best_a:
+                                remaining_acks = [a for a in remaining_acks if a.id != best_a.id]
+
+                    # Mark all remaining unresolvable units UNCERTAIN
                     for comp_d in all_competing_d:
                         if comp_d.id not in consumed_design:
                             match_groups.append(_commit_match(comp_d, None, None, MatchGroupStatus.UNCERTAIN, "AMBIGUOUS_DUPLICATE", 0.5, "Ambiguous duplicate item without distinguishing dimensions"))
-                    for comp_o in cand_orders:
+                    for comp_o in remaining_orders:
                         if comp_o.id not in consumed_order:
                             match_groups.append(_commit_match(None, comp_o, None, MatchGroupStatus.UNCERTAIN, "AMBIGUOUS_DUPLICATE", 0.5, "Ambiguous duplicate item without distinguishing dimensions"))
-                    for comp_a in cand_acks:
+                    for comp_a in remaining_acks:
                         if comp_a.id not in consumed_ack:
                             match_groups.append(_commit_match(None, None, comp_a, MatchGroupStatus.UNCERTAIN, "AMBIGUOUS_DUPLICATE", 0.5, "Ambiguous duplicate item without distinguishing dimensions"))
 
