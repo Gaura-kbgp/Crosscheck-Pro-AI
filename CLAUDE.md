@@ -121,7 +121,7 @@ TESTING_REVIEW_FIXLIST.md   — full fix list from the P0–P4 testing review
 - **Primary**: OpenAI (`OPENAI_API_KEY` in `backend/.env`), model from `OPENAI_MODEL` (default `gpt-4o`)
 - **Fallback**: Google Gemini (`GEMINI_API_KEY` in `backend/.env`), model from `GEMINI_MODEL` (default `gemini-2.5-flash`; set `GEMINI_MODEL=gemini-flash-latest` in `.env` for new API keys restricted to newer models)
 - Pattern: `_FallbackAIProvider` in `backend/app/integrations/ai/factory.py`; Gemini wired as live secondary when both keys present (was previously always `None`)
-- Mini model opt-in: `OPENAI_MINI_MODEL` (default `gpt-4o-mini`), enabled by `OPENAI_USE_MINI_FOR_TEXT=true` (O2, not yet active)
+- Mini model opt-in: `OPENAI_MINI_MODEL` (default `gpt-4o-mini`), enabled by `OPENAI_USE_MINI_FOR_TEXT=true` (O2). **Active** — quality comparison confirmed 100% SKU/qty match on ORDER and ACK vs gpt-4o baseline (96–97% cost saving). Set in `backend/.env`.
 - Usage tracking: every `extract_structured_data` call returns `_api_usage` dict (provider, calls[], total tokens, estimated cost); `processing.py` pops it and saves to `Extraction.api_usage` JSONB column
 
 ## Roles
@@ -143,6 +143,14 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 ---
 
 ## Changelog (newest first)
+
+### 2026-11-05 (session 9 — O2 enabled + production verification)
+- **O2 quality comparison completed**: gpt-4o-mini vs gpt-4o on ORDER (127 items, 82 SKUs) and ACK (21 items, 13 SKUs) from Demo Project. Result: **100% SKU/quantity match** on both documents, **96–97% cost savings** ($0.748 → $0.023 per project).
+- **`OPENAI_USE_MINI_FOR_TEXT=true` enabled** in `backend/.env` — O2 is now active in production.
+- **Gemini model fix** (`config.py`, `gemini.py`, `openai_provider.py`): default updated from deprecated `gemini-1.5-flash` to `gemini-2.5-flash`; `GEMINI_MODEL=gemini-flash-latest` set in `.env` for new-user API keys. Added `gemini-2.5-flash` and `gemini-3.8-flash` to `_MODEL_PRICING`.
+- **O3 database persistence verified** (both providers): live Supabase reads confirmed `api_usage` JSONB populated with correct provider, model, per-call token counts, and estimated cost for Gemini and OpenAI.
+- **O4 live fallback verified**: OpenAI 401 → automatic Gemini fallback → correct extraction + correct usage attribution confirmed end-to-end.
+- **512 tests pass** throughout.
 
 ### 2026-11-05 (session 8c — O1 Vision gate)
 - **O1 — Vision gate** (`backend/app/integrations/ai/openai_provider.py`): `_vision_pages_needed(page_evidence, text_items) -> Optional[set]` gates the DESIGN Vision pass to pages that actually need it.
