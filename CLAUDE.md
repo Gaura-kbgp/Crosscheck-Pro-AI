@@ -142,6 +142,15 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
+### 2026-11-05 (session 7 — Quantity resolution redesign)
+- **Evidence-based quantity resolution** (`backend/app/engines/matching.py`): Replaced blind `w.quantity = fp_qty` overwrite with metadata annotation. Original extracted quantities are NEVER modified. When FLOORPLAN is dropped as lower-priority, annotates the ELEVATION winner's `source_metadata["quantity_resolution"]` with full evidence:
+  - `resolved_quantity`, `quantity_source`, `resolution_method`, `confidence_status`, `conflicting_views`, `floorplan_pages`
+  - Three outcomes: FLOORPLAN > winner → INFERRED; equal → HIGH; FLOORPLAN < winner → NEEDS_REVIEW
+- **`CanonicalMatchingUnit`** reads `quantity_resolution.resolved_quantity` from the deduped item and uses it for `aggregate_quantity`. Downstream crosscheck uses this correctly.
+- **Demo Project verification**: 82 → 81 discrepancies. B24BP changed from CHANGED (false) to MATCHED. `design_qty_raw=1` (ELEVATION, preserved in DB), `resolved_quantity=3` (INFERRED, source=FLOORPLAN, conflicting_views=ELEVATION:1). 4 remaining qty discrepancies are all genuine (BC1551, FLTSHF36, SHC3, W3015BP).
+- **Tests**: 5 new tests: `test_qty_resolution_floorplan_higher`, `test_qty_resolution_views_agree`, `test_qty_resolution_elevation_higher_needs_review`, `test_canonical_unit_uses_resolved_quantity`, `test_b24bp_elevation_1_floorplan_3_order_3_no_qty_discrepancy`, `test_b24bp_elevation_1_floorplan_3_order_2_has_qty_discrepancy`. 19/19 pass.
+- **Known gap**: `supporting_occurrence_ids` not stored (extraction doesn't produce per-occurrence bounding boxes/IDs; would require extraction schema change). `NEEDS_REVIEW` cases (ELEVATION > FLOORPLAN) stored in metadata but not surfaced as crosscheck discrepancies (0 such cases in Demo Project).
+
 ### 2026-11-05 (session 6 — Dedup audit + finish inheritance fix + crosscheck UI grouping)
 - **Extraction audit findings** (`scratchpad/audit_extraction.py`, `scratchpad/audit2.py`):
   - W1848L/R root cause: DESIGN has W1842L/R (42" height), ORDER has W1848L/R (48" height) — genuinely different SKUs, real discrepancy. Extraction is correct. EXTRA classification is correct.
