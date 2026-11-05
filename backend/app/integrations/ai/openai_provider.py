@@ -45,6 +45,16 @@ except ImportError:
 
 from app.core.config import settings
 from app.integrations.ai.base import AIProvider
+
+
+def _build_usage_summary(provider: str, calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "provider": provider,
+        "calls": calls,
+        "total_input_tokens": sum(c.get("input_tokens", 0) for c in calls),
+        "total_output_tokens": sum(c.get("output_tokens", 0) for c in calls),
+        "total_estimated_cost_usd": round(sum(c.get("estimated_cost_usd", 0.0) for c in calls), 6),
+    }
 from app.engines.reconciliation import reconcile_items
 from app.integrations.ai.prompts.spec_book_v1 import SPEC_BOOK_PROMPT_V1
 from app.integrations.ai.prompts.design_vision_v1 import DESIGN_VISION_PROMPT_V1
@@ -62,6 +72,50 @@ class OpenAIProvider(AIProvider):
         if api_key and OpenAI:
             self.client = OpenAI(api_key=api_key)
         self.model_name = settings.OPENAI_MODEL or "gpt-4o"
+        self.mini_model_name = getattr(settings, "OPENAI_MINI_MODEL", "gpt-4o-mini")
+        self.use_mini_for_text = bool(getattr(settings, "OPENAI_USE_MINI_FOR_TEXT", False))
+
+    # Published pricing per 1M tokens (Nov 2025). Kept as a lookup so a model
+    # rename in settings.OPENAI_MODEL doesn't silently produce $0 cost records.
+    _MODEL_PRICING: dict = {
+        "gpt-4o":           {"input": 5.00,  "output": 15.00},
+        "gpt-4o-mini":      {"input": 0.15,  "output": 0.60},
+        "gpt-4.1":          {"input": 2.00,  "output": 8.00},
+        "gpt-4.1-mini":     {"input": 0.40,  "output": 1.60},
+        "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+        "gemini-2.0-flash": {"input": 0.10,  "output": 0.40},
+    }
+
+    def _make_usage_record(
+        self,
+        call_type: str,
+        response: Any,
+        page_start: Optional[int] = None,
+        page_end: Optional[int] = None,
+        page_count: Optional[int] = None,
+        model_override: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        usage = getattr(response, "usage", None)
+        if not usage:
+            return None
+        in_tok = getattr(usage, "prompt_tokens", 0) or 0
+        out_tok = getattr(usage, "completion_tokens", 0) or 0
+        model = model_override or self.model_name
+        p = self._MODEL_PRICING.get(model, {"input": 5.00, "output": 15.00})
+        cost = (in_tok * p["input"] + out_tok * p["output"]) / 1_000_000
+        rec: Dict[str, Any] = {
+            "call_type": call_type,
+            "model": model,
+            "input_tokens": in_tok,
+            "output_tokens": out_tok,
+            "estimated_cost_usd": round(cost, 6),
+        }
+        if page_start is not None:
+            rec["page_start"] = page_start
+            rec["page_end"] = page_end
+        if page_count is not None:
+            rec["page_count"] = page_count
+        return rec
 
     # Bounds so page evidence stays cheap to persist (F8.3 Phase 2 §15/§23):
     # never retain full-resolution block arrays or unbounded text in the DB.
@@ -258,6 +312,7 @@ class OpenAIProvider(AIProvider):
         prompt: str,
         schema_json: Dict[str, Any],
         system_prompt: str,
+        _usage: Optional[List] = None,
     ) -> List[Dict[str, Any]]:
         """
         Extracts items for a page-group via text. A page GROUP can still
@@ -295,6 +350,13 @@ class OpenAIProvider(AIProvider):
             response_format={"type": "json_object"},
             temperature=0.1,
         )
+        _rec = self._make_usage_record(
+            "text_batch", response,
+            page_start=batch_pages[0]["page_number"],
+            page_end=batch_pages[-1]["page_number"],
+        )
+        if _rec and _usage is not None:
+            _usage.append(_rec)
         choice = response.choices[0]
         content = choice.message.content or "{}"
         try:
@@ -307,8 +369,8 @@ class OpenAIProvider(AIProvider):
         if truncated and len(batch_pages) > 1:
             mid = len(batch_pages) // 2
             return (
-                self._extract_text_pages(batch_pages[:mid], total_pages, prompt, schema_json, system_prompt)
-                + self._extract_text_pages(batch_pages[mid:], total_pages, prompt, schema_json, system_prompt)
+                self._extract_text_pages(batch_pages[:mid], total_pages, prompt, schema_json, system_prompt, _usage)
+                + self._extract_text_pages(batch_pages[mid:], total_pages, prompt, schema_json, system_prompt, _usage)
             )
         if truncated:
             # Single page still truncated/unparsable — nothing smaller to
@@ -356,6 +418,7 @@ class OpenAIProvider(AIProvider):
         batch_size: int = 6,
         dpi: int = 150,
         vision_prompt_override: Optional[str] = None,
+        _usage: Optional[List] = None,
     ) -> List[Dict[str, Any]]:
         """
         Renders every PDF page to an image and extracts items via Vision,
@@ -405,6 +468,14 @@ class OpenAIProvider(AIProvider):
                     response_format={"type": "json_object"},
                     temperature=0.1,
                 )
+                _rec = self._make_usage_record(
+                    "vision_batch", response,
+                    page_start=batch_start + 1,
+                    page_end=batch_end,
+                    page_count=batch_end - batch_start,
+                )
+                if _rec and _usage is not None:
+                    _usage.append(_rec)
                 content = response.choices[0].message.content or "{}"
                 parsed = json.loads(content)
                 if isinstance(parsed, dict):
@@ -437,6 +508,8 @@ class OpenAIProvider(AIProvider):
             "You MUST respond ONLY with valid JSON strictly adhering to the specified schema."
         )
 
+        _usage: List = []
+
         if mime_type.startswith("image/"):
             # Direct image input via vision
             base64_img = base64.b64encode(file_bytes).decode("utf-8")
@@ -462,8 +535,13 @@ class OpenAIProvider(AIProvider):
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
+            _rec = self._make_usage_record("vision_single", response, page_count=1)
+            if _rec:
+                _usage.append(_rec)
             content = response.choices[0].message.content or "{}"
-            return json.loads(content)
+            result = json.loads(content)
+            result["_api_usage"] = _build_usage_summary("openai", _usage)
+            return result
 
         elif mime_type == "application/pdf":
             import re
@@ -486,7 +564,7 @@ class OpenAIProvider(AIProvider):
                 for batch_start in range(0, len(page_evidence), TEXT_BATCH_SIZE):
                     batch_pages = page_evidence[batch_start:batch_start + TEXT_BATCH_SIZE]
                     merged_items.extend(
-                        self._extract_text_pages(batch_pages, len(page_evidence), prompt, schema_json, system_prompt)
+                        self._extract_text_pages(batch_pages, len(page_evidence), prompt, schema_json, system_prompt, _usage)
                     )
 
                 # DESIGN documents (floor plans / elevations) often carry the
@@ -503,6 +581,7 @@ class OpenAIProvider(AIProvider):
                         file_bytes, prompt, schema_json, system_prompt,
                         dpi=200,
                         vision_prompt_override=DESIGN_VISION_PROMPT_V1,
+                        _usage=_usage,
                     )
                     # The text and Vision passes frequently both see the SAME
                     # physical item (whatever is in the text layer is also
@@ -512,7 +591,7 @@ class OpenAIProvider(AIProvider):
                     # callouts that the text pass never saw.
                     merged_items = self._dedupe_design_items(merged_items + vision_items)
 
-                return {"items": merged_items, "_page_evidence": page_evidence}
+                return {"items": merged_items, "_page_evidence": page_evidence, "_api_usage": _build_usage_summary("openai", _usage)}
             else:
                 # Scanned / Image PDF (no embedded text) -> two independent passes + reconciliation
                 if not fitz:
@@ -565,6 +644,13 @@ class OpenAIProvider(AIProvider):
                                 response_format={"type": "json_object"},
                                 temperature=0.1,
                             )
+                            _rec = self._make_usage_record(
+                                "ocr_batch", ocr_response,
+                                page_start=batch_pages[0]["page_number"],
+                                page_end=batch_pages[-1]["page_number"],
+                            )
+                            if _rec:
+                                _usage.append(_rec)
                             ocr_content = ocr_response.choices[0].message.content or "{}"
                             ocr_parsed = json.loads(ocr_content)
                             if isinstance(ocr_parsed, dict):
@@ -576,7 +662,7 @@ class OpenAIProvider(AIProvider):
                 doc_fitz = fitz.open(stream=file_bytes, filetype="pdf")
                 total_pages = len(doc_fitz)
                 doc_fitz.close()
-                merged_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt)
+                merged_items = self._vision_batch_extract(file_bytes, prompt, schema_json, system_prompt, _usage=_usage)
 
                 # F8.3 Phase 2 §14: scanned pages have no deterministic text
                 # layer to verify claims against, so evidence is honestly
@@ -628,7 +714,7 @@ class OpenAIProvider(AIProvider):
                 else:
                     page_evidence_out = vision_page_evidence
 
-                return {"items": final_items, "_page_evidence": page_evidence_out}
+                return {"items": final_items, "_page_evidence": page_evidence_out, "_api_usage": _build_usage_summary("openai", _usage)}
 
         elif mime_type in (
             "application/vnd.ms-excel",
@@ -656,8 +742,14 @@ class OpenAIProvider(AIProvider):
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
+            _rec = self._make_usage_record("text_single", response)
+            if _rec:
+                _usage.append(_rec)
             content = response.choices[0].message.content or "{}"
-            return json.loads(content)
+            result = json.loads(content)
+            if isinstance(result, dict):
+                result["_api_usage"] = _build_usage_summary("openai", _usage)
+            return result
 
         elif mime_type in (
             "application/msword",
@@ -685,8 +777,14 @@ class OpenAIProvider(AIProvider):
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
+            _rec = self._make_usage_record("text_single", response)
+            if _rec:
+                _usage.append(_rec)
             content = response.choices[0].message.content or "{}"
-            return json.loads(content)
+            result = json.loads(content)
+            if isinstance(result, dict):
+                result["_api_usage"] = _build_usage_summary("openai", _usage)
+            return result
 
         else:
             # Plain text, Markdown, CSV, or other formats
@@ -715,8 +813,14 @@ class OpenAIProvider(AIProvider):
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
+            _rec = self._make_usage_record("text_single", response)
+            if _rec:
+                _usage.append(_rec)
             content = response.choices[0].message.content or "{}"
-            return json.loads(content)
+            result = json.loads(content)
+            if isinstance(result, dict):
+                result["_api_usage"] = _build_usage_summary("openai", _usage)
+            return result
 
     def extract_spec_book_codes(self, file_bytes: bytes) -> List[Dict[str, Any]]:
         """

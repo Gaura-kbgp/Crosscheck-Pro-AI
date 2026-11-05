@@ -370,6 +370,10 @@ class Extraction(Base):
     model_name = Column(String, nullable=False)
     prompt_version = Column(String, nullable=False)
     confidence = Column(JSON, nullable=True)
+    # Dedicated billing record — kept separate from confidence (extraction quality score)
+    # and raw_data (item output). Fields: calls[], total_input_tokens, total_output_tokens,
+    # total_estimated_cost_usd, provider, page_counts{text, vision, ocr}.
+    api_usage = Column(JSON, nullable=True)
     attempt = Column(Integer, nullable=False, default=1)
     is_latest = Column(Boolean, nullable=False, default=True)
     extraction_version = Column(String, nullable=True)

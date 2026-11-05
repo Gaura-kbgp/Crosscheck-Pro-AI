@@ -16,14 +16,22 @@ def test_ai_provider_factory_default(monkeypatch):
 
 
 def test_ai_provider_factory_openai(monkeypatch):
-    # OpenAI is the sole provider whenever a key is present, with no
-    # cross-provider fallback (retry-only on the primary).
+    # OpenAI primary + Gemini fallback when both keys are present.
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test-fake-key")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "fake-gemini-key")
     provider = get_ai_provider()
     assert isinstance(provider, _FallbackAIProvider)
     assert isinstance(provider._primary, OpenAIProvider)
     assert provider._primary.model_name == "gpt-4o"
+    assert isinstance(provider._secondary, GeminiProvider)
+
+
+def test_ai_provider_factory_openai_no_gemini(monkeypatch):
+    # OpenAI only when no Gemini key — secondary stays None.
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test-fake-key")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    provider = get_ai_provider()
+    assert isinstance(provider._primary, OpenAIProvider)
     assert provider._secondary is None
 
 

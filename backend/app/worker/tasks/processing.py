@@ -212,6 +212,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
         # Every item gets an evidence_status annotation; the item itself is
         # never dropped or mutated beyond that.
         page_evidence = raw_data.pop("_page_evidence", [])
+        api_usage = raw_data.pop("_api_usage", None)
         for item in raw_data.get("items", []):
             if "verification" in item:
                 # F8.3 Phase 3: this item already went through OCR/Vision
@@ -248,6 +249,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                 model_name=model_name,
                 prompt_version="v1",
                 confidence=doc_validation,
+                api_usage=api_usage,
                 attempt=max_attempt + 1,
                 is_latest=True,
                 extraction_version=EXTRACTION_VERSION,

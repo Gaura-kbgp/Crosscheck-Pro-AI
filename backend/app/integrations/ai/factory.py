@@ -83,9 +83,18 @@ class _FallbackAIProvider(AIProvider):
 
 def get_ai_provider() -> AIProvider:
     """
-    Returns the active AI provider. Always uses OpenAI when a key is present;
-    retries up to 3× on transient 503/429 errors before failing.
+    Returns the active AI provider. OpenAI primary when key is present, with
+    Gemini as live fallback when GEMINI_API_KEY is also set.
     """
-    primary: AIProvider = OpenAIProvider() if settings.OPENAI_API_KEY else GeminiProvider()
-    return _FallbackAIProvider(primary, None)
+    has_openai = bool((settings.OPENAI_API_KEY or "").strip())
+    has_gemini = bool((settings.GEMINI_API_KEY or "").strip())
+
+    if has_openai:
+        primary: AIProvider = OpenAIProvider()
+        secondary: AIProvider | None = GeminiProvider() if has_gemini else None
+    else:
+        primary = GeminiProvider()
+        secondary = None
+
+    return _FallbackAIProvider(primary, secondary)
 
