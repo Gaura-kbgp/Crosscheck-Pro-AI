@@ -118,9 +118,11 @@ TESTING_REVIEW_FIXLIST.md   — full fix list from the P0–P4 testing review
 
 ## AI Provider Config
 
-- **Primary**: OpenAI (`OPENAI_API_KEY` in `backend/.env`)
-- **Fallback**: Google Gemini (`GEMINI_API_KEY` in `backend/.env`)
-- Pattern: `_FallbackAIProvider` wrapper in `backend/app/engines/`; tries primary, catches exceptions, retries on secondary
+- **Primary**: OpenAI (`OPENAI_API_KEY` in `backend/.env`), model from `OPENAI_MODEL` (default `gpt-4o`)
+- **Fallback**: Google Gemini (`GEMINI_API_KEY` in `backend/.env`), model from `GEMINI_MODEL` (default `gemini-1.5-flash`)
+- Pattern: `_FallbackAIProvider` in `backend/app/integrations/ai/factory.py`; Gemini wired as live secondary when both keys present (was previously always `None`)
+- Mini model opt-in: `OPENAI_MINI_MODEL` (default `gpt-4o-mini`), enabled by `OPENAI_USE_MINI_FOR_TEXT=true` (O2, not yet active)
+- Usage tracking: every `extract_structured_data` call returns `_api_usage` dict (provider, calls[], total tokens, estimated cost); `processing.py` pops it and saves to `Extraction.api_usage` JSONB column
 
 ## Roles
 
@@ -142,7 +144,25 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
-### 2026-11-05 (session 8 — NEEDS_REVIEW surfacing + final safety audit)
+### 2026-11-05 (session 8b — O3+O4 cost optimization: token tracking + Gemini fallback)
+- **O3 — API usage tracking** (`backend/app/integrations/ai/openai_provider.py`, `gemini.py`, `processing.py`, `models/core.py`):
+  - New `api_usage` JSONB column on `Extraction` (Alembic migration `d4e9b2f7c831`). Separate from `confidence` (quality) and `raw_data` (items).
+  - `_MODEL_PRICING` dict on `OpenAIProvider` (gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, gemini models).
+  - `_make_usage_record(call_type, response, ...)` helper captures `response.usage` → tokens + estimated cost per call.
+  - `_usage: List` accumulator threaded through `_extract_text_pages` (including bisect retry recursion) and `_vision_batch_extract`. OCR batches in `extract_structured_data` also captured. All single-call branches (image, excel, word, text) also captured.
+  - `extract_structured_data` returns `_api_usage` key: `{provider, calls[], total_input_tokens, total_output_tokens, total_estimated_cost_usd}`.
+  - `GeminiProvider` captures `response.usage_metadata` and returns same `_api_usage` structure.
+  - `processing.py` pops `_api_usage` from `raw_data` (like `_page_evidence`) and saves to `Extraction.api_usage`.
+- **O4 — Gemini fallback wired** (`backend/app/integrations/ai/factory.py`, `gemini.py`):
+  - Fixed broken model name: was hardcoded `gemini-3.6-flash` (non-existent model), now reads `settings.GEMINI_MODEL` (default `gemini-1.5-flash`).
+  - `factory.py` now creates `GeminiProvider()` as `_secondary` when both `OPENAI_API_KEY` and `GEMINI_API_KEY` are set. Previously always `None`.
+  - `test_ai_providers.py` updated: existing test asserts `GeminiProvider` secondary (not None); new test covers OpenAI-only path (no Gemini key).
+- **Config additions** (`backend/app/core/config.py`): `GEMINI_MODEL`, `OPENAI_MINI_MODEL`, `OPENAI_USE_MINI_FOR_TEXT` added to `Settings`.
+- **472 tests pass** (excluding `test_processing.py` per known deadlock).
+- **Pending — O1** (Vision gate): filter Vision pass to only pages that need it (quality assessment: empty, few text blocks, missing quantities). Not yet implemented.
+- **Pending — O2** (gpt-4o-mini for ORDER/ACK): config wired (`OPENAI_USE_MINI_FOR_TEXT`), but comparison requires OpenAI credits to validate quality before enabling.
+
+### 2026-11-05 (session 8a — NEEDS_REVIEW surfacing + final safety audit)
 - **NEEDS_REVIEW surfaced in CrossCheckEngine** (`backend/app/engines/crosscheck.py`): Before the standard quantity comparison block in `_evaluate_match_group`, added a check for `source_metadata["quantity_resolution"]["confidence_status"] == "NEEDS_REVIEW"`. When present, emits a `quantity_resolution` field discrepancy (severity WARNING) with `source_values` containing `design_raw`, `resolved_quantity`, `order`, `acknowledgement`, `conflicting_views`, and `resolution_confidence`. Groups with ELEVATION > FLOORPLAN quantity can no longer silently appear as MATCHED.
 - **New regression test** (`test_needs_review_surfaced_as_discrepancy`): ELEVATION 3 > FLOORPLAN 1 → ORDER=3 → still emits a `quantity_resolution` discrepancy. All 20 tests pass.
 - **4 remaining qty discrepancies validated** (BC1551, FLTSHF36, SHC3, W3015BP): All genuine. Each has ORDER with multiple qty=1 line items aggregating to 2–3, while DESIGN shows only 1 from an ELEVATION view with no FLOORPLAN counterpart. No auto-resolution is possible.
