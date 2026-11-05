@@ -354,3 +354,25 @@ def test_floorplan_elevation_match_no_false_missing():
     missing = [g for g in groups if g.status == MatchGroupStatus.MISSING]
     assert len(matched) == 1
     assert len(missing) == 0
+
+
+def test_needs_review_surfaced_as_discrepancy():
+    # ELEVATION (3) > FLOORPLAN (1) → NEEDS_REVIEW must appear as a quantity_resolution discrepancy,
+    # not silently MATCHED even when ORDER qty matches ELEVATION.
+    proj_id = uuid4()
+    org_id = uuid4()
+    matcher = MatchingEngine()
+    d_fp = _vt_item("W1218", 1, "FLOORPLAN", "Display 2: Wall")
+    d_el = _vt_item("W1218", 3, "ELEVATION", "Display 2: Wall - Front")
+    o = CanonicalLineItem(
+        id=uuid4(), project_id=proj_id, organization_id=org_id,
+        source_type=DocumentType.ORDER, raw_sku="W1218", normalized_sku="W1218", quantity=3,
+    )
+    groups = matcher.match_items([d_fp, d_el], [o], [], proj_id, org_id)
+    crosscheck = CrossCheckEngine()
+    discs = crosscheck.evaluate(groups, proj_id, org_id)
+    nr_discs = [d for d in discs if d.field == "quantity_resolution"]
+    assert len(nr_discs) == 1, "NEEDS_REVIEW resolution must surface a discrepancy"
+    assert nr_discs[0].source_values["resolution_confidence"] == "NEEDS_REVIEW"
+    assert nr_discs[0].source_values["design_raw"] == 3  # ELEVATION qty
+    assert nr_discs[0].source_values["order"] == 3

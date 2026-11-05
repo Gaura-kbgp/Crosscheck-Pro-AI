@@ -256,6 +256,33 @@ class CrossCheckEngine:
         # =============================================================
         # 3. Quantity Comparison with 3-Way State Sequence & First Divergence
         # =============================================================
+        # Surface NEEDS_REVIEW quantity resolution before comparing values.
+        # ELEVATION > FLOORPLAN means we can't be sure of the design quantity;
+        # emit a discrepancy so it never silently appears as MATCHED.
+        if mg.design_item:
+            _qr = (mg.design_item.source_metadata or {}).get("quantity_resolution") or {}
+            if _qr.get("confidence_status") == "NEEDS_REVIEW":
+                _d_raw = mg.design_item.quantity
+                _d_res = _qr.get("resolved_quantity")
+                _o_qty = _get_item_qty(mg.order_item)
+                _a_qty = _get_item_qty(mg.ack_item)
+                _cv = _qr.get("conflicting_views") or {}
+                discrepancies.append(self._create_discrepancy(
+                    mg, project_id, organization_id, "quantity_resolution",
+                    {
+                        "design_raw": _d_raw,
+                        "resolved_quantity": _d_res,
+                        "order": _o_qty,
+                        "acknowledgement": _a_qty,
+                        "conflicting_views": _cv,
+                        "resolution_confidence": "NEEDS_REVIEW",
+                    },
+                    {"resolution_method": _qr.get("resolution_method"), "quantity_source": _qr.get("quantity_source")},
+                    DocumentType.DESIGN,
+                    Severity.WARNING,
+                    f"Quantity uncertain: ELEVATION view shows {_d_raw} but FLOORPLAN shows {_cv.get('FLOORPLAN')} for the same display — manual verification recommended"
+                ))
+
         d_qty = _get_item_qty(mg.design_item)
         o_qty = _get_item_qty(mg.order_item)
         a_qty = _get_item_qty(mg.ack_item)
