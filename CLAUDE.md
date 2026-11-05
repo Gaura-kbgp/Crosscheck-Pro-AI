@@ -159,7 +159,7 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
   - `test_ai_providers.py` updated: existing test asserts `GeminiProvider` secondary (not None); new test covers OpenAI-only path (no Gemini key).
 - **Config additions** (`backend/app/core/config.py`): `GEMINI_MODEL`, `OPENAI_MINI_MODEL`, `OPENAI_USE_MINI_FOR_TEXT` added to `Settings`.
 - **472 tests pass** (excluding `test_processing.py` per known deadlock).
-- **Pending — O1** (Vision gate): filter Vision pass to only pages that need it (quality assessment: empty, few text blocks, missing quantities). Not yet implemented.
+- **O1 — Vision gate** (`backend/app/integrations/ai/openai_provider.py`): `_vision_pages_needed(page_evidence, text_items) -> Optional[set]` added. A page is flagged for Vision when: EMPTY status, sparse text (< 3 blocks or < 80 chars), no items extracted, or any item missing quantity. `_vision_batch_extract` now accepts `page_numbers: Optional[set]`; empty set skips Vision entirely. DESIGN text path calls the gate after the text pass and passes the result. `EXTRACTION_VERSION` bumped to `f8.3.6`. 10 regression tests.
 - **Pending — O2** (gpt-4o-mini for ORDER/ACK): config wired (`OPENAI_USE_MINI_FOR_TEXT`), but comparison requires OpenAI credits to validate quality before enabling.
 
 ### 2026-11-05 (session 8a — NEEDS_REVIEW surfacing + final safety audit)
