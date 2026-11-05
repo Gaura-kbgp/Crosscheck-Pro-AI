@@ -542,3 +542,48 @@ def normalize_cabinet_spec(val: Optional[str]) -> Optional[str]:
     if base is None:
         return None
     return _SPEC_ALIASES.get(base, base)
+
+
+# Explicitly verified finish equivalences — Demo Project 2026-11-05.
+# Maps each normalized finish string to a canonical color-word.
+# Do NOT add entries without verified PDF source evidence.
+# shortcut: covers Demo Project (Chesapeake Bay) only; expand for new projects.
+_FINISH_CANONICAL: Dict[str, str] = {
+    "DEWDROP":                       "DEWDROP",
+    "JAMESTOWN PHW DEWDROP":         "DEWDROP",
+    "JAMESTOWN PHW DEWDROP PLY":     "DEWDROP",
+    "JAMESTOWN PHW DEWDROP PLY B":   "DEWDROP",
+    "SAGEWOOD":                      "SAGEWOOD",
+    "MONROE PHW SAGEWOOD":           "SAGEWOOD",
+    "MONROE PHW SAGEWOOD PLY":       "SAGEWOOD",
+    "MONROE PHW SAGEWOOD PLY B":     "SAGEWOOD",
+    "ALPINE":                        "ALPINE",
+    "HAMPTON PHW ALPINE":            "ALPINE",
+    "HAMPTON PHW ALPINE PLY":        "ALPINE",
+    "HAMPTON PHW ALPINE PLY B":      "ALPINE",
+    "COCOA":                         "COCOA",
+    "ATLANTA BIRCH COCOA":           "COCOA",
+    "DRIFT":                         "DRIFT",
+    "APEX MAPLE DRIFT":              "DRIFT",
+    "JUTE":                          "JUTE",
+    "APEX OAK JUTE":                 "JUTE",
+    "APEX OAK JUTE FX":              "JUTE",
+}
+
+
+def _canonical_finish(finish: Optional[str]) -> Optional[str]:
+    base = normalize_text(finish)
+    if base is None:
+        return None
+    return _FINISH_CANONICAL.get(base, base)
+
+
+def are_finishes_equivalent(fin1: Optional[str], fin2: Optional[str]) -> bool:
+    """
+    Returns True iff fin1 and fin2 refer to the same finish color.
+    Uses the explicitly verified _FINISH_CANONICAL alias table; unknown
+    finishes fall back to exact normalized comparison (no guessing).
+    """
+    c1 = _canonical_finish(fin1)
+    c2 = _canonical_finish(fin2)
+    return c1 is not None and c2 is not None and c1 == c2

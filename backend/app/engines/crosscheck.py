@@ -9,7 +9,8 @@ from app.engines.normalization import (
     are_dimensions_equivalent,
     normalize_text,
     normalize_cabinet_spec,
-    are_skus_equivalent
+    are_skus_equivalent,
+    are_finishes_equivalent,
 )
 
 
@@ -128,6 +129,9 @@ class CrossCheckEngine:
         # 1. Missing / Extra / State Transition Item Presence Discrepancies
         # =============================================================
         # Case A: Present in Design, Missing in Order and Missing in Ack
+        # Note: uncertain_vision=True items (Vision-only, confidence < 0.4) are
+        # preserved as MISSING with their flag in source_metadata and notes —
+        # human reviewer sees the flag; status is not changed to UNCERTAIN here.
         if mg.design_item_id and not mg.order_item_id and not mg.ack_item_id:
             sev = Severity.WARNING if mg_cat == ItemCategory.UNKNOWN else Severity.CRITICAL
             exp = (
@@ -351,11 +355,11 @@ class CrossCheckEngine:
         # =============================================================
         # 5. Finish & Door Style Comparison
         # =============================================================
-        d_fin = normalize_text(mg.design_item.finish) if mg.design_item else None
-        o_fin = normalize_text(mg.order_item.finish) if mg.order_item else None
-        a_fin = normalize_text(mg.ack_item.finish) if mg.ack_item else None
+        d_fin = mg.design_item.finish if mg.design_item else None
+        o_fin = mg.order_item.finish if mg.order_item else None
+        a_fin = mg.ack_item.finish if mg.ack_item else None
 
-        if d_fin is not None and o_fin is not None and d_fin != o_fin:
+        if d_fin is not None and o_fin is not None and not are_finishes_equivalent(d_fin, o_fin):
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "finish",
                 {"design": mg.design_item.finish, "order": mg.order_item.finish, "acknowledgement": mg.ack_item.finish if mg.ack_item else None},
@@ -364,7 +368,7 @@ class CrossCheckEngine:
                 Severity.WARNING,
                 f"Finish changed: Design specifies '{mg.design_item.finish}', but Order specifies '{mg.order_item.finish}'"
             ))
-        if o_fin is not None and a_fin is not None and o_fin != a_fin:
+        if o_fin is not None and a_fin is not None and not are_finishes_equivalent(o_fin, a_fin):
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "finish",
                 {"design": mg.design_item.finish if mg.design_item else None, "order": mg.order_item.finish, "acknowledgement": mg.ack_item.finish},

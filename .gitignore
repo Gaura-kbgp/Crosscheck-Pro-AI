@@ -71,6 +71,8 @@ temp/
 report_*.txt
 reprocess_*.txt
 audit_*.txt
+test_report*.pdf
+*.pdf
 
 # ------------------------------------------
 # Coverage

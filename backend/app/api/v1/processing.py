@@ -58,7 +58,8 @@ def get_document_extraction(
 ):
     extraction = db.query(Extraction).filter(
         Extraction.document_id == document_id,
-        Extraction.organization_id == current_user.organization_id
+        Extraction.organization_id == current_user.organization_id,
+        Extraction.is_latest == True
     ).first()
     if not extraction:
         from fastapi import HTTPException

@@ -200,7 +200,16 @@ def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMa
         # Create group key incorporating finish/door_style if explicitly specified to protect variant integrity
         fin = normalize_text(item.finish or "") or ""
         door = normalize_text(item.door_style or "") or ""
-        group_key = f"{norm_sku}__FIN_{fin}__DOOR_{door}"
+        # For DESIGN items with an explicit view_type, include the display position
+        # so that the same SKU with no finish in Display 2 and Display 6 never
+        # merges — they represent physically separate cabinet instances.
+        pos_key = ""
+        meta = item.source_metadata or {}
+        if meta.get("view_type"):
+            pos = meta.get("position", "") or ""
+            pm = re.search(r'display\s*(\d+)', pos, re.IGNORECASE)
+            pos_key = f"display_{pm.group(1)}" if pm else (normalize_text(pos) or "")
+        group_key = f"{norm_sku}__FIN_{fin}__DOOR_{door}__POS_{pos_key}"
         
         if group_key not in groups:
             groups[group_key] = []

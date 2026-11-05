@@ -144,6 +144,15 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
+### 2026-11-05 (session 10 — classification fix + cross-display dedup + Vision gate finish condition)
+- **Issue 2 — APPLIANCE misclassification fixed** (`backend/app/engines/classification.py`): ORDER AI extractor puts the display section header ("Display 1 – 48in Range Kitchen") as the item description when no item-specific description exists. `classify()` now strips the entire description when it matches `^display\s+\d+\s*[–—-]` before keyword matching. W1848L → CABINET, W1848R → CABINET, FLTSHF24 → UNKNOWN (not APPLIANCE). These items now correctly generate EXTRA discrepancies.
+- **Issue 1a — Cross-display merging eliminated** (`backend/app/engines/matching.py`): `aggregate_document_items` group key now includes a `__POS_display_N` suffix for items with an explicit `view_type` (DESIGN items). "TUKT with no finish in Display 2" and "TUKT with no finish in Display 6" are no longer merged into one CanonicalMatchingUnit, which was the root cause of AMBIGUOUS_DUPLICATE for multi-display SKUs (the 53 UNCERTAIN groups). ORDER and ACK items (no view_type) are unaffected.
+- **Issue 1b — Vision gate: missing-finish condition** (`backend/app/integrations/ai/openai_provider.py`): `_vision_pages_needed` has a 5th condition — a page is flagged for Vision when ALL its ELEVATION items are missing a finish. This causes Display 6 (Mudroom, page 19) to receive a Vision pass so it can inherit a finish from the visible display header. With a finish, Display 6 items can then either match ORDER items or be filtered by `_is_out_of_scope`.
+- **Issue 3 — SHC3 is correctly MATCHED**: DESIGN SHC3 qty=2 (FLOORPLAN, Display 4: Island), ORDER SHC3 qty=2 (two line items × qty=1 each, same finish). They match. The f8.3.7 extraction correctly finds SHC3 in DESIGN; prior "genuine discrepancy" was an f8.3.6 extraction miss. No code change needed.
+- **`DESIGN_EXTRACTION_VERSION` bumped `f8.3.7` → `f8.3.8`**: Vision gate change affects which pages are visioned; cached extractions at f8.3.7 intentionally invalidated.
+- **20 regression tests** in `tests/test_session10_fixes.py`. **566 tests pass** (excludes deadlock file + pre-existing timing flap in test_production_qa.py).
+- **Limitation**: The position key fix and Vision gate fix both take effect on next pipeline re-run with `force_reprocess=true` for DESIGN. The live Demo Project still shows cached f8.3.7 extraction with 53 UNCERTAIN groups; a rescan is required to verify the full reduction. Classification fix applies immediately on next crosscheck run (no re-extraction needed).
+
 ### 2026-11-05 (session 9 — O2 enabled + production verification)
 - **O2 quality comparison completed**: gpt-4o-mini vs gpt-4o on ORDER (127 items, 82 SKUs) and ACK (21 items, 13 SKUs) from Demo Project. Result: **100% SKU/quantity match** on both documents, **96–97% cost savings** ($0.748 → $0.023 per project).
 - **`OPENAI_USE_MINI_FOR_TEXT=true` enabled** in `backend/.env` — O2 is now active in production.

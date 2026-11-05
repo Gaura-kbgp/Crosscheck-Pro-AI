@@ -459,6 +459,12 @@ class OpenAIProvider(AIProvider):
                 continue
             if any(not item.get("quantity") for item in page_items):
                 needed.add(pn)
+                continue
+            # All ELEVATION items on this page lack a finish — the display header
+            # may only be visible in the drawing, so a text pass cannot inherit it.
+            elevation_items = [i for i in page_items if i.get("view_type") == "ELEVATION"]
+            if elevation_items and all(not (i.get("finish") or "").strip() for i in elevation_items):
+                needed.add(pn)
 
         return needed
 
@@ -669,7 +675,22 @@ class OpenAIProvider(AIProvider):
                     # hits into one item instead of double-counting it, while
                     # still keeping genuinely Vision-only (graphics-only)
                     # callouts that the text pass never saw.
+                    _text_keys = {
+                        ((i.get("sku") or "").strip().upper(), i.get("page_number"))
+                        for i in merged_items
+                        if i.get("sku") and i.get("page_number") is not None
+                    }
                     merged_items = self._dedupe_design_items(merged_items + vision_items)
+                    # Flag Vision-only items with confidence < 0.4 — do not
+                    # delete them; crosscheck will reclassify as UNCERTAIN.
+                    for _item in merged_items:
+                        _sku = (_item.get("sku") or "").strip().upper()
+                        _page = _item.get("page_number")
+                        if (_sku and _page is not None
+                                and (_sku, _page) not in _text_keys
+                                and (_item.get("confidence") or 1.0) < 0.4):
+                            _item["uncertain_vision"] = True
+                            _item["notes"] = ((_item.get("notes") or "") + " [UNCERTAIN: low Vision confidence]").strip()
 
                 return {"items": merged_items, "_page_evidence": page_evidence, "_api_usage": _build_usage_summary("openai", _usage)}
             else:

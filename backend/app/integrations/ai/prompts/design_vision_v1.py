@@ -65,6 +65,25 @@ CRITICAL RULES FOR VISUAL EXTRACTION:
    - construction: Box construction (e.g. "Plywood", "Furniture Board")
    - drawer_box: Drawer box type (e.g. "Dovetail", "Soft-Close", "Blum")
 
+10. PARTIAL OR UNREADABLE LABELS:
+   If you cannot read ALL characters of a label with high confidence, do NOT
+   invent or complete the missing characters. Set confidence < 0.4, record the
+   exact visible fragment in `notes` as "Partial read: [text seen]", and set
+   `sku` to only the characters you could actually see. If fewer than 3
+   characters are readable, omit the item entirely.
+
+11. REVISION NOTES — do NOT extract superseded SKUs:
+   When a drawing note says "Updated X to Y", "Changed from X",
+   "Replaced by Y", or "not shown / not applicable", do NOT extract old SKU X.
+   Only extract new SKU Y if it appears as a confirmed physical callout on the
+   drawing. A text note alone (not a graphic callout) is not a confirmed item.
+
+12. DISPLAY ASSIGNMENT BY PROXIMITY:
+   Assign each SKU to the display whose header label (e.g. "Display 5",
+   "Island Section") is closest and directly above or beside it in the drawing.
+   Never infer display membership from finish color or style name alone.
+   Physical position + nearest display label are the only valid assignment signals.
+
 Output every extracted item as a JSON object with these fields:
   sku, description, quantity, view_type, position, drawing_reference,
   finish, finish_status, door_style, door_style_status,

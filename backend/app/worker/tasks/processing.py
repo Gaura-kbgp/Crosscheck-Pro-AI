@@ -15,11 +15,11 @@ from app.engines.extraction_validator import ExtractionValidator
 import json
 import uuid
 
-# F8.3 Phase 3 §23: bumped whenever extraction behavior changes materially
-# (new prompt safety rules, page evidence, OCR/reconciliation, etc). Combined
-# with document_hash + provider + model + prompt_version, this is the
-# identity used to decide whether a prior extraction can be safely reused.
+# F8.3 Phase 3 §23: bumped whenever extraction behavior changes materially.
+# DESIGN has its own version so ORDER/ACK caches at f8.3.6 are never evicted
+# when only the DESIGN prompt/Vision gate changes.
 EXTRACTION_VERSION = "f8.3.6"
+DESIGN_EXTRACTION_VERSION = "f8.3.8"
 
 
 def _get_db():
@@ -168,6 +168,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
         # instead of re-calling the AI, UNLESS force_reprocess is set or the
         # identity has changed (§25/§26 — never freeze a bad result forever;
         # a version/prompt/model/provider bump always triggers fresh work).
+        ext_version = DESIGN_EXTRACTION_VERSION if doc["document_type"] == "DESIGN" else EXTRACTION_VERSION
         reused_extraction = None
         db = _get_db()
         try:
@@ -177,7 +178,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     Extraction.is_latest == True,  # noqa: E712
                 ).first()
                 if (latest and latest.document_hash == current_hash
-                        and latest.extraction_version == EXTRACTION_VERSION
+                        and latest.extraction_version == ext_version
                         and latest.provider == provider_name
                         and latest.model_name == model_name
                         and latest.prompt_version == "v1"):
@@ -252,7 +253,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                 api_usage=api_usage,
                 attempt=max_attempt + 1,
                 is_latest=True,
-                extraction_version=EXTRACTION_VERSION,
+                extraction_version=ext_version,
                 document_hash=current_hash,
             )
             db.add(ext)
@@ -392,6 +393,8 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     source_meta["drawer_box"] = item.get("drawer_box")
                     source_meta["view_type"] = item.get("view_type")
                     source_meta["position"] = item.get("position")
+                    if item.get("uncertain_vision"):
+                        source_meta["uncertain_vision"] = True
                     canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ORDER":
                     canonical.finish = item.get("finish")

@@ -181,6 +181,11 @@ class ItemClassifier:
         r'^(CAB|CABINET)[0-9]+.*$'                                  # Generic cabinet prefix
     ]
 
+    # ORDER items inherit the display section header as their description when no
+    # item-specific description exists (e.g. "Display 1 – 48in Range Kitchen").
+    # This describes the kitchen type, not the item — never classify from it.
+    _DISPLAY_HEADER_RE = re.compile(r'^\s*display\s+\d+\s*[–—\-]', re.IGNORECASE)
+
     def classify(
         self,
         raw_sku: Optional[str] = None,
@@ -196,7 +201,9 @@ class ItemClassifier:
         norm_sku = normalize_sku(raw_sku) or ""
         tokens = extract_sku_tokens(norm_sku)
         desc_norm = normalize_text(description or "") or ""
-        
+        if desc_norm and self._DISPLAY_HEADER_RE.match(desc_norm):
+            desc_norm = ""
+
         evidence: Dict[str, Any] = {
             "sku": norm_sku,
             "tokens": tokens,
