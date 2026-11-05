@@ -19,7 +19,7 @@ import uuid
 # (new prompt safety rules, page evidence, OCR/reconciliation, etc). Combined
 # with document_hash + provider + model + prompt_version, this is the
 # identity used to decide whether a prior extraction can be safely reused.
-EXTRACTION_VERSION = "f8.3.5"
+EXTRACTION_VERSION = "f8.3.6"
 
 
 def _get_db():

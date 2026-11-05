@@ -409,6 +409,51 @@ class OpenAIProvider(AIProvider):
                     existing["confidence"] = item.get("confidence")
         return passthrough + [merged[k] for k in order]
 
+    def _vision_pages_needed(
+        self,
+        page_evidence: List[Dict[str, Any]],
+        text_items: List[Dict[str, Any]],
+    ) -> Optional[set]:
+        """
+        Returns the set of 1-indexed page numbers that need a Vision pass,
+        or None to Vision all pages when evidence is unavailable.
+
+        A page needs Vision when any of:
+        - EMPTY status (no embedded text — purely a drawing/image page)
+        - Sparse text: < 3 blocks or < 80 chars (labels likely drawn as graphics)
+        - Text pass extracted no items on this page
+        - Any item on this page is missing a quantity (partial text extraction)
+        """
+        if not page_evidence:
+            return None
+
+        pages_with_items: Dict[int, List[Dict[str, Any]]] = {}
+        for item in text_items:
+            pn = item.get("page_number")
+            if pn is not None:
+                pages_with_items.setdefault(int(pn), []).append(item)
+
+        needed: set = set()
+        for p in page_evidence:
+            pn = p["page_number"]
+            raw_text = p.get("raw_text") or ""
+            blocks = p.get("blocks") or []
+
+            if p.get("status") == "EMPTY" or not raw_text.strip():
+                needed.add(pn)
+                continue
+            if len(blocks) < 3 or len(raw_text.strip()) < 80:
+                needed.add(pn)
+                continue
+            page_items = pages_with_items.get(pn, [])
+            if not page_items:
+                needed.add(pn)
+                continue
+            if any(not item.get("quantity") for item in page_items):
+                needed.add(pn)
+
+        return needed
+
     def _vision_batch_extract(
         self,
         file_bytes: bytes,
@@ -419,6 +464,7 @@ class OpenAIProvider(AIProvider):
         dpi: int = 150,
         vision_prompt_override: Optional[str] = None,
         _usage: Optional[List] = None,
+        page_numbers: Optional[set] = None,
     ) -> List[Dict[str, Any]]:
         """
         Renders every PDF page to an image and extracts items via Vision,
@@ -436,12 +482,22 @@ class OpenAIProvider(AIProvider):
         items: List[Dict[str, Any]] = []
         for batch_start in range(0, total_pages, batch_size):
             batch_end = min(batch_start + batch_size, total_pages)
+            # page_numbers gate: skip pages not flagged as needing Vision
+            pages_in_batch = [
+                pno for pno in range(batch_start, batch_end)
+                if page_numbers is None or (pno + 1) in page_numbers
+            ]
+            if not pages_in_batch:
+                continue
+            # Report the actual page range sent so the model has context
+            first_page = pages_in_batch[0] + 1
+            last_page = pages_in_batch[-1] + 1
             batch_content = [
                 {
                     "type": "text",
                     "text": (
                         f"{effective_prompt}\n\n"
-                        f"Analyzing document pages {batch_start + 1} to {batch_end} of {total_pages} "
+                        f"Analyzing document pages {first_page} to {last_page} of {total_pages} "
                         f"as images. Read any labels, callouts or codes that appear only as drawing "
                         f"graphics, not as selectable text.\n"
                         f"You MUST return the response strictly matching this JSON schema:\n"
@@ -449,7 +505,7 @@ class OpenAIProvider(AIProvider):
                     ),
                 }
             ]
-            for pno in range(batch_start, batch_end):
+            for pno in pages_in_batch:
                 page = doc_fitz[pno]
                 pix = page.get_pixmap(dpi=dpi)
                 img_bytes = pix.tobytes("jpeg")
@@ -577,12 +633,18 @@ class OpenAIProvider(AIProvider):
                 # aren't silently dropped (brief §4: native text presence
                 # does not mean drawing labels were extracted completely).
                 if doc_type == "DESIGN" and self.client:
-                    vision_items = self._vision_batch_extract(
-                        file_bytes, prompt, schema_json, system_prompt,
-                        dpi=200,
-                        vision_prompt_override=DESIGN_VISION_PROMPT_V1,
-                        _usage=_usage,
-                    )
+                    vision_pages = self._vision_pages_needed(page_evidence, merged_items)
+                    # Skip Vision entirely when the gate says no page needs it
+                    if vision_pages is not None and len(vision_pages) == 0:
+                        vision_items = []
+                    else:
+                        vision_items = self._vision_batch_extract(
+                            file_bytes, prompt, schema_json, system_prompt,
+                            dpi=200,
+                            vision_prompt_override=DESIGN_VISION_PROMPT_V1,
+                            _usage=_usage,
+                            page_numbers=vision_pages,
+                        )
                     # The text and Vision passes frequently both see the SAME
                     # physical item (whatever is in the text layer is also
                     # visible on the rendered page) — merge same-SKU/same-page
