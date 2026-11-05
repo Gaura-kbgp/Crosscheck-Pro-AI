@@ -154,7 +154,7 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 - **`EXTRACTION_VERSION` bumped `f8.3.5` → `f8.3.6`**: Vision pages per document may now differ from prior runs; cached extractions at f8.3.5 are intentionally invalidated.
 - **10 regression tests** in `tests/test_o1_vision_gate.py`. 506 tests pass.
 - **O2 — mini model for ORDER/ACK** (`backend/app/integrations/ai/openai_provider.py`): `_extract_text_pages` now accepts `model: Optional[str]`; bisect retries inherit the same override. When `OPENAI_USE_MINI_FOR_TEXT=True` and `doc_type` is `ORDER` or `ACKNOWLEDGEMENT`, mini model is used for every text batch (~96% cost saving on structured text docs). DESIGN always uses primary model. Usage records carry the actual per-call model for correct cost tracking. **Flag defaults to `False`** — enable in `.env` only after quality verification with active OpenAI credits. Known limit: cache key uses `provider.model_name`; toggling the flag requires `force_reprocess=true`. 6 regression tests.
-- **Pending — DB migration**: `d4e9b2f7c831` (add `api_usage` column) exists but has not been applied to production. Run `python -m alembic upgrade head` in `backend/`.
+- **DB migration applied**: `d4e9b2f7c831` — `api_usage` JSONB column is live on `extractions` table.
 
 ### 2026-11-05 (session 8b — O3+O4 cost optimization: token tracking + Gemini fallback)
 - **O3 — API usage tracking** (`backend/app/integrations/ai/openai_provider.py`, `gemini.py`, `processing.py`, `models/core.py`):
