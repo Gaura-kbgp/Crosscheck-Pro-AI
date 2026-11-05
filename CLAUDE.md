@@ -142,6 +142,14 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 
 ## Changelog (newest first)
 
+### 2026-11-05 (session 8 — NEEDS_REVIEW surfacing + final safety audit)
+- **NEEDS_REVIEW surfaced in CrossCheckEngine** (`backend/app/engines/crosscheck.py`): Before the standard quantity comparison block in `_evaluate_match_group`, added a check for `source_metadata["quantity_resolution"]["confidence_status"] == "NEEDS_REVIEW"`. When present, emits a `quantity_resolution` field discrepancy (severity WARNING) with `source_values` containing `design_raw`, `resolved_quantity`, `order`, `acknowledgement`, `conflicting_views`, and `resolution_confidence`. Groups with ELEVATION > FLOORPLAN quantity can no longer silently appear as MATCHED.
+- **New regression test** (`test_needs_review_surfaced_as_discrepancy`): ELEVATION 3 > FLOORPLAN 1 → ORDER=3 → still emits a `quantity_resolution` discrepancy. All 20 tests pass.
+- **4 remaining qty discrepancies validated** (BC1551, FLTSHF36, SHC3, W3015BP): All genuine. Each has ORDER with multiple qty=1 line items aggregating to 2–3, while DESIGN shows only 1 from an ELEVATION view with no FLOORPLAN counterpart. No auto-resolution is possible.
+- **INFERRED confidence assessment**: Bounding boxes and occurrence IDs are not captured by the extraction schema. INFERRED (FLOORPLAN > ELEVATION) is semantically correct based on view-type convention. No code change needed; occurrence-level schema upgrade deferred.
+- **No DB migration required**: All new data stored in existing `source_metadata` JSONB and `discrepancies` columns.
+- **Known gap — PDF report**: `report_service.py` has no special handling for `quantity_resolution` field discrepancies. They appear in the generic discrepancy list without user-friendly copy. Report update deferred.
+
 ### 2026-11-05 (session 7 — Quantity resolution redesign)
 - **Evidence-based quantity resolution** (`backend/app/engines/matching.py`): Replaced blind `w.quantity = fp_qty` overwrite with metadata annotation. Original extracted quantities are NEVER modified. When FLOORPLAN is dropped as lower-priority, annotates the ELEVATION winner's `source_metadata["quantity_resolution"]` with full evidence:
   - `resolved_quantity`, `quantity_source`, `resolution_method`, `confidence_status`, `conflicting_views`, `floorplan_pages`
