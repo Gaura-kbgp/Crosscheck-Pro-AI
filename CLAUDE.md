@@ -119,7 +119,7 @@ TESTING_REVIEW_FIXLIST.md   — full fix list from the P0–P4 testing review
 ## AI Provider Config
 
 - **Primary**: OpenAI (`OPENAI_API_KEY` in `backend/.env`), model from `OPENAI_MODEL` (default `gpt-4o`)
-- **Fallback**: Google Gemini (`GEMINI_API_KEY` in `backend/.env`), model from `GEMINI_MODEL` (default `gemini-1.5-flash`)
+- **Fallback**: Google Gemini (`GEMINI_API_KEY` in `backend/.env`), model from `GEMINI_MODEL` (default `gemini-2.5-flash`; set `GEMINI_MODEL=gemini-flash-latest` in `.env` for new API keys restricted to newer models)
 - Pattern: `_FallbackAIProvider` in `backend/app/integrations/ai/factory.py`; Gemini wired as live secondary when both keys present (was previously always `None`)
 - Mini model opt-in: `OPENAI_MINI_MODEL` (default `gpt-4o-mini`), enabled by `OPENAI_USE_MINI_FOR_TEXT=true` (O2, not yet active)
 - Usage tracking: every `extract_structured_data` call returns `_api_usage` dict (provider, calls[], total tokens, estimated cost); `processing.py` pops it and saves to `Extraction.api_usage` JSONB column
@@ -167,7 +167,7 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
   - `processing.py` pops `_api_usage` from `raw_data` (like `_page_evidence`) and saves to `Extraction.api_usage`.
   - 24-test O3+O4 verification suite in `tests/test_o3_o4_verification.py`.
 - **O4 — Gemini fallback wired** (`backend/app/integrations/ai/factory.py`, `gemini.py`):
-  - Fixed broken model name: was hardcoded `gemini-3.6-flash` (non-existent model), now reads `settings.GEMINI_MODEL` (default `gemini-1.5-flash`).
+  - Fixed broken model name: was hardcoded `gemini-3.6-flash` (non-existent model), now reads `settings.GEMINI_MODEL` (default `gemini-2.5-flash`). **Updated 2026-11-05 session 9**: default updated from `gemini-1.5-flash` (deprecated) to `gemini-2.5-flash`; new-user API keys must use `gemini-flash-latest` via `.env`.
   - `factory.py` now creates `GeminiProvider()` as `_secondary` when both `OPENAI_API_KEY` and `GEMINI_API_KEY` are set. Previously always `None`.
   - `test_ai_providers.py` updated: existing test asserts `GeminiProvider` secondary (not None); new test covers OpenAI-only path.
 - **Config additions** (`backend/app/core/config.py`): `GEMINI_MODEL`, `OPENAI_MINI_MODEL`, `OPENAI_USE_MINI_FOR_TEXT` added to `Settings`.
