@@ -155,7 +155,7 @@ class TestClassificationPolicy:
         physical discrepancy."""
         o = _item(DocumentType.ORDER, "MLD8", qty=5, desc="Scribe Molding", category=ItemCategory.MOLDING)
         mg = MatchGroup(id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
-                         status=MatchGroupStatus.EXTRA, order_item_id=o.id, order_item=o)
+                         status=MatchGroupStatus.EXTRA, cabinet_list_item_id=o.id, cabinet_list_item=o)
         cc = CrossCheckEngine()
         discs = cc.evaluate([mg], uuid4(), uuid4())
         assert discs == []
@@ -163,7 +163,7 @@ class TestClassificationPolicy:
     def test_commercial_charge_is_excluded_from_discrepancies(self):
         o = _item(DocumentType.ORDER, "FREIGHTSURCHARGE", qty=1, desc="Freight Surcharge", category=ItemCategory.COMMERCIAL_CHARGE)
         mg = MatchGroup(id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
-                         status=MatchGroupStatus.EXTRA, order_item_id=o.id, order_item=o)
+                         status=MatchGroupStatus.EXTRA, cabinet_list_item_id=o.id, cabinet_list_item=o)
         cc = CrossCheckEngine()
         assert cc.evaluate([mg], uuid4(), uuid4()) == []
 
@@ -191,7 +191,7 @@ class TestFirstDivergenceAttribution:
         a = _item(DocumentType.ACKNOWLEDGEMENT, "PNL144848", desc="Plywood Panel 48x48", category=ItemCategory.CABINET)
         mg = MatchGroup(id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
                          status=MatchGroupStatus.CHANGED,
-                         order_item_id=o.id, order_item=o,
+                         cabinet_list_item_id=o.id, cabinet_list_item=o,
                          ack_item_id=a.id, ack_item=a)
         cc = CrossCheckEngine()
         discs = cc.evaluate([mg], uuid4(), uuid4())
@@ -207,7 +207,7 @@ class TestFirstDivergenceAttribution:
         mg = MatchGroup(id=uuid4(), project_id=uuid4(), organization_id=uuid4(),
                          status=MatchGroupStatus.CHANGED,
                          design_item_id=d.id, design_item=d,
-                         order_item_id=o.id, order_item=o,
+                         cabinet_list_item_id=o.id, cabinet_list_item=o,
                          ack_item_id=a.id, ack_item=a)
         cc = CrossCheckEngine()
         discs = cc.evaluate([mg], uuid4(), uuid4())

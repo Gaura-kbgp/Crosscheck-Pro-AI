@@ -38,9 +38,16 @@ export const DOCUMENT_TYPE_CONFIGS: Record<DocumentType, DocumentTypeConfig> = {
   },
   ORDER: {
     type: "ORDER",
-    title: "Purchase Order",
-    subtitle: "Client / Dealer Purchase Order",
-    description: "Upload the dealer purchase order contract with requested quantities, finishes, styles, and unit pricing.",
+    title: "Purchase Order (Legacy)",
+    subtitle: "Legacy Purchase Order",
+    description: "Historical purchase order document.",
+    icon: ShoppingCart,
+  },
+  CABINET_LIST: {
+    type: "CABINET_LIST",
+    title: "Cabinet List",
+    subtitle: "Cabinet List from Design Software",
+    description: "Upload the cabinet list exported from your design software (e.g. 20-20 / Cyncly) with item codes, quantities, and finishes.",
     icon: ShoppingCart,
   },
   ACKNOWLEDGEMENT: {
@@ -57,6 +64,7 @@ interface ProjectDocumentCardProps {
   projectId: string;
   document?: Document | null;
   onUpload: (type: DocumentType, file: File) => Promise<void>;
+  onReplace?: (documentId: string, type: DocumentType, file: File) => Promise<void>;
   onDelete: (documentId: string) => Promise<void>;
   isUploading?: boolean;
   isDeleting?: boolean;
@@ -68,6 +76,7 @@ export function ProjectDocumentCard({
   projectId,
   document,
   onUpload,
+  onReplace,
   onDelete,
   isUploading = false,
   isDeleting = false,
@@ -78,6 +87,7 @@ export function ProjectDocumentCard({
   const isUploaded = Boolean(document);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
   const [isViewing, setIsViewing] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   const formatFileSize = (bytes?: number) => {
@@ -102,17 +112,32 @@ export function ProjectDocumentCard({
   };
 
   const handleReplaceClick = () => {
-    if (!canManage || isUploading) return;
+    if (!canManage || isUploading || pendingFile) return;
     replaceInputRef.current?.click();
   };
 
-  const handleReplaceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      await onUpload(documentType, file);
-      e.target.value = "";
+  const handleReplaceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      setPendingFile(e.target.files[0]);
+    }
+    // Reset so the same file can be re-selected if the user cancels and tries again
+    e.target.value = "";
+  };
+
+  const handleReplaceConfirm = async () => {
+    if (!pendingFile || !document) return;
+    try {
+      if (onReplace) {
+        await onReplace(document.id, documentType, pendingFile);
+      } else {
+        await onUpload(documentType, pendingFile);
+      }
+    } finally {
+      setPendingFile(null);
     }
   };
+
+  const handleReplaceCancel = () => setPendingFile(null);
 
   const filename =
     document?.original_filename || document?.filename || `${config.title}.pdf`;
@@ -187,12 +212,45 @@ export function ProjectDocumentCard({
               <input
                 ref={replaceInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tif,.tiff,.xls,.xlsx,.csv,.txt,.md,.doc,.docx"
                 onChange={handleReplaceFileChange}
                 disabled={!canManage || isUploading}
                 className="hidden"
                 id={`replace-input-${documentType}`}
               />
+
+              {/* Inline replace confirmation (shown after file is selected) */}
+              {pendingFile && (
+                <div className="rounded-lg border border-[#FEF3C7] bg-[#FFFBEB] p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-[#92400E]">
+                    Replace current document?
+                  </p>
+                  <p className="text-[11px] text-[#92400E] truncate" title={pendingFile.name}>
+                    New file: {pendingFile.name}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={handleReplaceConfirm}
+                      disabled={isUploading}
+                      isLoading={isUploading}
+                      className="flex-1 text-xs"
+                    >
+                      Confirm Replace
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleReplaceCancel}
+                      disabled={isUploading}
+                      className="flex-1 text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1">
@@ -213,7 +271,7 @@ export function ProjectDocumentCard({
                       variant="outline"
                       size="sm"
                       onClick={handleReplaceClick}
-                      disabled={isUploading}
+                      disabled={isUploading || Boolean(pendingFile)}
                       isLoading={isUploading}
                       leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
                       className="flex-1 text-xs"
@@ -224,7 +282,7 @@ export function ProjectDocumentCard({
                       variant="destructive"
                       size="sm"
                       onClick={() => setIsRemoveDialogOpen(true)}
-                      disabled={isDeleting || isUploading}
+                      disabled={isDeleting || isUploading || Boolean(pendingFile)}
                       className="px-2.5"
                       title="Remove document"
                     >

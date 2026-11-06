@@ -8,18 +8,21 @@ from app.integrations.ai import get_ai_provider
 from app.schemas.extraction import DesignExtraction, OrderExtraction, AcknowledgementExtraction
 from app.integrations.ai.prompts.design_v1 import DESIGN_PROMPT_V1
 from app.integrations.ai.prompts.order_v1 import ORDER_PROMPT_V1
+from app.integrations.ai.prompts.cabinet_list_v1 import CABINET_LIST_PROMPT_V1
 from app.integrations.ai.prompts.acknowledgement_v1 import ACKNOWLEDGEMENT_PROMPT_V1
 from app.engines.normalization import normalize_sku, parse_and_normalize_dimensions, normalize_quantity
 from app.engines.cabinet_intelligence import CabinetCodeIntelligence
 from app.engines.extraction_validator import ExtractionValidator
 import json
+import threading
 import uuid
+from datetime import datetime, timezone
 
 # F8.3 Phase 3 §23: bumped whenever extraction behavior changes materially.
 # DESIGN has its own version so ORDER/ACK caches at f8.3.6 are never evicted
 # when only the DESIGN prompt/Vision gate changes.
 EXTRACTION_VERSION = "f8.3.6"
-DESIGN_EXTRACTION_VERSION = "f8.3.8"
+DESIGN_EXTRACTION_VERSION = "f8.3.9"
 
 
 def _get_db():
@@ -72,7 +75,28 @@ def _update_job_status(job_id, status, error=None, project_id=None):
         db.close()
 
 
-def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str, correlation_id: str, force_reprocess: bool = False):
+def _set_heartbeat(job_id: uuid.UUID) -> None:
+    """Write now() to last_heartbeat_at. Failure is always non-fatal."""
+    try:
+        db = _get_db()
+        try:
+            db.query(ProcessingJob).filter(ProcessingJob.id == job_id).update(
+                {"last_heartbeat_at": datetime.now(timezone.utc)}
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+
+def _heartbeat_loop(job_id: uuid.UUID, stop: threading.Event) -> None:
+    """Daemon thread: refresh heartbeat every 30 s until stop is set."""
+    while not stop.wait(30):
+        _set_heartbeat(job_id)
+
+
+def _run_pipeline_inner(job_id_str: str, project_id_str: str, organization_id_str: str, correlation_id: str, force_reprocess: bool = False):
     job_id = uuid.UUID(job_id_str)
     project_id = uuid.UUID(project_id_str)
     organization_id = uuid.UUID(organization_id_str)
@@ -151,6 +175,9 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
             schema = DesignExtraction
         elif doc["document_type"] == "ORDER":
             prompt = ORDER_PROMPT_V1
+            schema = OrderExtraction
+        elif doc["document_type"] == "CABINET_LIST":
+            prompt = CABINET_LIST_PROMPT_V1
             schema = OrderExtraction
         elif doc["document_type"] == "ACKNOWLEDGEMENT":
             prompt = ACKNOWLEDGEMENT_PROMPT_V1
@@ -291,7 +318,21 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
     if _is_cancelled(job_id):
         return
     _update_job_status(job_id, ProcessingJobStatus.NORMALIZING, project_id=project_id)
-    
+
+    # Stale-worker guard: abort if any source document was replaced while Stage 2 ran.
+    # In PostgreSQL FK constraints catch stale writes later, but failing here gives a
+    # clear error message and avoids propagating empty results through Stages 4-6.
+    _guard_db = _get_db()
+    try:
+        _surviving = {r[0] for r in _guard_db.query(Document.id).filter(Document.id.in_(doc_ids)).all()}
+    finally:
+        _guard_db.close()
+    if _surviving != set(doc_ids):
+        _update_job_status(job_id, ProcessingJobStatus.FAILED,
+            {"message": "One or more documents were replaced during processing. Please re-run the cross-check."},
+            project_id=project_id)
+        return
+
     db = _get_db()
     try:
         # F8.3 Phase 3: Extraction is now one-row-per-attempt (history-preserving),
@@ -300,7 +341,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
             Extraction.document_id.in_(doc_ids),
             Extraction.is_latest == True,  # noqa: E712
         ).all()
-        
+
         validator = ExtractionValidator()
         # Cabinet Code Intelligence: one instance per run so the manufacturer
         # dictionary loads once (§37), not per item. When manufacturer_id is
@@ -407,6 +448,24 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
                     source_meta["drawer_box"] = item.get("drawer_box")
                     source_meta["line_number"] = item.get("line_number")
                     canonical.source_metadata = source_meta
+                elif doc["document_type"] == "CABINET_LIST":
+                    canonical.finish = item.get("finish")
+                    canonical.finish_status = item.get("finish_status")
+                    canonical.door_style = item.get("door_style")
+                    canonical.door_style_status = item.get("door_style_status")
+                    canonical.modifications = item.get("modifications")
+                    source_meta["species"] = item.get("species")
+                    source_meta["construction"] = item.get("construction")
+                    source_meta["drawer_box"] = item.get("drawer_box")
+                    source_meta["line_number"] = item.get("line_number")
+                    # Cabinet List dual-key: user_code (matches DESIGN) is the raw_sku
+                    # already set above; manuf_code (matches ACK) is stored here.
+                    source_meta["user_code"] = item.get("user_code")
+                    source_meta["manuf_code"] = item.get("manuf_code")
+                    source_meta["manuf_code_normalized"] = normalize_sku(item.get("manuf_code"))
+                    source_meta["fin_side"] = item.get("fin_side")
+                    source_meta["is_non_plan"] = item.get("is_non_plan")
+                    canonical.source_metadata = source_meta
                 elif doc["document_type"] == "ACKNOWLEDGEMENT":
                     canonical.finish = item.get("finish")
                     canonical.finish_status = item.get("finish_status")
@@ -438,7 +497,21 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
     if _is_cancelled(job_id):
         return
     _update_job_status(job_id, ProcessingJobStatus.MATCHING, project_id=project_id)
-    
+
+    # Second stale-worker guard: covers the window where Stage 3 commits before
+    # replace_document, which CASCADE-deletes those CanonicalLineItems, leaving
+    # Stage 4 with empty inputs and producing an empty "Review Required" result.
+    _guard_db = _get_db()
+    try:
+        _surviving = {r[0] for r in _guard_db.query(Document.id).filter(Document.id.in_(doc_ids)).all()}
+    finally:
+        _guard_db.close()
+    if _surviving != set(doc_ids):
+        _update_job_status(job_id, ProcessingJobStatus.FAILED,
+            {"message": "One or more documents were replaced during processing. Please re-run the cross-check."},
+            project_id=project_id)
+        return
+
     db = _get_db()
     try:
         all_canonical_items = db.query(CanonicalLineItem).filter(
@@ -446,7 +519,7 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
         ).all()
         
         design_items = [i for i in all_canonical_items if i.source_type.value == "DESIGN"]
-        order_items = [i for i in all_canonical_items if i.source_type.value == "ORDER"]
+        order_items = [i for i in all_canonical_items if i.source_type.value in ("ORDER", "CABINET_LIST")]
         ack_items = [i for i in all_canonical_items if i.source_type.value == "ACKNOWLEDGEMENT"]
 
         from app.engines.matching import MatchingEngine
@@ -481,6 +554,28 @@ def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str
     # verified" for the flagged document(s) rather than staying silent.
     completion_error = {"warnings": extraction_warnings} if extraction_warnings else None
     _update_job_status(job_id, ProcessingJobStatus.COMPLETED, completion_error, project_id=project_id)
+
+
+def _run_pipeline(job_id_str: str, project_id_str: str, organization_id_str: str, correlation_id: str, force_reprocess: bool = False):
+    """Heartbeat wrapper around _run_pipeline_inner.
+
+    Sets an initial heartbeat before Stage 1 so startup recovery can
+    distinguish this running instance from an abandoned previous one.
+    The daemon thread refreshes the heartbeat every 30 s.
+    """
+    job_id = uuid.UUID(job_id_str)
+    _set_heartbeat(job_id)
+    stop_hb = threading.Event()
+    threading.Thread(
+        target=_heartbeat_loop,
+        args=(job_id, stop_hb),
+        daemon=True,
+        name=f"hb-{job_id_str[:8]}",
+    ).start()
+    try:
+        _run_pipeline_inner(job_id_str, project_id_str, organization_id_str, correlation_id, force_reprocess)
+    finally:
+        stop_hb.set()
 
 
 @shared_task(bind=True, max_retries=3)

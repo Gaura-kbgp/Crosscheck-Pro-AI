@@ -56,7 +56,7 @@ def _status_for(groups, sku):
 
 
 def _sku(g):
-    item = g.design_item or g.order_item or g.ack_item
+    item = g.design_item or g.cabinet_list_item or g.ack_item
     return (item.raw_sku or "").upper() if item else ""
 
 
@@ -97,9 +97,9 @@ def test_sm96_display1_sagewood_matches():
     design, order = _sm96_scenario()
     groups = _run(design, order)
     matched = [g for g in groups if g.status in (MatchGroupStatus.MATCHED, MatchGroupStatus.CHANGED)
-               and g.design_item and g.order_item
+               and g.design_item and g.cabinet_list_item
                and g.design_item.finish == "SAGEWOOD/PHW"
-               and g.order_item.finish == "SAGEWOOD/PHW"]
+               and g.cabinet_list_item.finish == "SAGEWOOD/PHW"]
     assert matched, "SM96 Display1 SAGEWOOD should be MATCHED to ORDER SAGEWOOD"
 
 
@@ -108,9 +108,9 @@ def test_sm96_display3_cashmere_matches():
     design, order = _sm96_scenario()
     groups = _run(design, order)
     matched = [g for g in groups if g.status in (MatchGroupStatus.MATCHED, MatchGroupStatus.CHANGED)
-               and g.design_item and g.order_item
+               and g.design_item and g.cabinet_list_item
                and g.design_item.finish == "CASHMERE/PHW"
-               and "CASHMERE" in (g.order_item.finish or "").upper()]
+               and "CASHMERE" in (g.cabinet_list_item.finish or "").upper()]
     assert matched, "SM96 Display3 CASHMERE should be MATCHED to ORDER CASHMERE"
 
 
@@ -217,11 +217,11 @@ def test_no_double_consumption():
     groups = _run(design, order)
     consumed_order_ids = set()
     for g in groups:
-        if g.order_item:
-            assert g.order_item.id not in consumed_order_ids, (
-                f"ORDER item {g.order_item.id} ({g.order_item.finish}) consumed twice"
+        if g.cabinet_list_item:
+            assert g.cabinet_list_item.id not in consumed_order_ids, (
+                f"ORDER item {g.cabinet_list_item.id} ({g.cabinet_list_item.finish}) consumed twice"
             )
-            consumed_order_ids.add(g.order_item.id)
+            consumed_order_ids.add(g.cabinet_list_item.id)
     assert len(consumed_order_ids) <= len(order)
 
 
@@ -274,7 +274,7 @@ def test_two_design_units_competing_same_order_both_uncertain():
     ]
     groups = _run(design, order)
     uncertain_d = [g for g in groups if g.status == MatchGroupStatus.UNCERTAIN and g.design_item]
-    uncertain_o = [g for g in groups if g.status == MatchGroupStatus.UNCERTAIN and g.order_item and not g.design_item]
+    uncertain_o = [g for g in groups if g.status == MatchGroupStatus.UNCERTAIN and g.cabinet_list_item and not g.design_item]
     matched = [g for g in groups if g.status in (MatchGroupStatus.MATCHED, MatchGroupStatus.CHANGED)]
     assert len(uncertain_d) >= 2, (
         f"Both rescue candidates competing for same ORDER should be UNCERTAIN; got {len(uncertain_d)}"
@@ -316,7 +316,7 @@ def test_determinism_repeated_runs_identical():
         return sorted(
             [(g.status.value,
               g.design_item.finish or "" if g.design_item else "",
-              g.order_item.finish or "" if g.order_item else "")
+              g.cabinet_list_item.finish or "" if g.cabinet_list_item else "")
              for g in groups]
         )
 

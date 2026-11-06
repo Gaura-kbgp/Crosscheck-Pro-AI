@@ -244,7 +244,7 @@ export function ProcessingStatusCard({
             <div>
               <p className="font-bold text-slate-800">No documents uploaded</p>
               <p className="text-slate-600 mt-1 leading-relaxed">
-                This project has no documents to process. Upload a Design drawing, Purchase Order, and Manufacturer Acknowledgement above, then start the cross-check.
+                This project has no documents to process. Upload a Design drawing, Cabinet List, and Manufacturer Acknowledgement above, then start the cross-check.
               </p>
             </div>
           ) : isGeminiQuotaError ? (

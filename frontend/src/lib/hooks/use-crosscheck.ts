@@ -16,7 +16,7 @@ export function useCrossCheck(projectId: string | undefined) {
         id: mg.id,
         project_id: mg.project_id,
         canonical_sku: mg.final_sku || "Unknown SKU",
-        canonical_item_id: mg.design_item_id || mg.order_item_id || mg.ack_item_id || null,
+        canonical_item_id: mg.design_item_id || mg.cabinet_list_item_id || mg.ack_item_id || null,
         status: mg.status,
         final_sku: mg.final_sku,
         final_quantity: mg.final_quantity,
@@ -29,7 +29,7 @@ export function useCrossCheck(projectId: string | undefined) {
         // traceability (raw_sku + the evidence block) — not the full canonical
         // item record.
         design_item: mg.design_item ? { raw_sku: mg.design_item.raw_sku, document_id: mg.design_item.document_id, source_metadata: mg.design_item.source_metadata } : null,
-        order_item: mg.order_item ? { raw_sku: mg.order_item.raw_sku, document_id: mg.order_item.document_id, source_metadata: mg.order_item.source_metadata } : null,
+        cabinet_list_item: mg.cabinet_list_item ? { raw_sku: mg.cabinet_list_item.raw_sku, document_id: mg.cabinet_list_item.document_id, source_metadata: mg.cabinet_list_item.source_metadata } : null,
         ack_item: mg.ack_item ? { raw_sku: mg.ack_item.raw_sku, document_id: mg.ack_item.document_id, source_metadata: mg.ack_item.source_metadata } : null,
         // design_value / order_value / ack_value / field_name / severity / introduced_at
         // are all computed server-side (DiscrepancyResponse + CrossCheckEngine) from the

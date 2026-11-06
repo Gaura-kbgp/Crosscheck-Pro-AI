@@ -150,7 +150,7 @@ def test_design_extraction_version_isolated_from_order_ack():
 
 
 def test_design_extraction_version_matches_expected():
-    assert DESIGN_EXTRACTION_VERSION == "f8.3.8"
+    assert DESIGN_EXTRACTION_VERSION == "f8.3.9"
 
 
 def test_order_ack_extraction_version_unchanged():

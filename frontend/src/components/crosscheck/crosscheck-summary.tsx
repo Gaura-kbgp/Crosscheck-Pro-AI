@@ -87,7 +87,7 @@ export function CrossCheckSummary({
   return (
     <div className="space-y-4">
       <p className="text-xs text-[#58708F]">
-        Each card below is one item's comparison across Design, Purchase Order &amp; Acknowledgement.
+        Each card below is one item's comparison across Design, Cabinet List &amp; Acknowledgement.
         Click a card above to filter, or a row below to see its full evidence. To accept, reject, or
         override a finding, use the{" "}
         <span className="font-semibold text-[#0F2747]">Review &amp; Resolve Findings</span> button above.

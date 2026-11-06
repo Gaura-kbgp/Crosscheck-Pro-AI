@@ -15,7 +15,7 @@ export function DocumentSummaryCards({
 }: DocumentSummaryCardsProps) {
   const totalCount = documents.length;
   const designCount = documents.filter((d) => d.document_type === "DESIGN").length;
-  const orderCount = documents.filter((d) => d.document_type === "ORDER").length;
+  const orderCount = documents.filter((d) => d.document_type === "ORDER" || d.document_type === "CABINET_LIST").length;
   const ackCount = documents.filter((d) => d.document_type === "ACKNOWLEDGEMENT").length;
   const processingCount = documents.filter(
     (d) => d.status === "PROCESSING" || d.status === "UPLOADED"
@@ -37,7 +37,7 @@ export function DocumentSummaryCards({
       iconColor: "text-[#0284C7]",
     },
     {
-      label: "Purchase Orders",
+      label: "Cabinet Lists",
       count: orderCount,
       icon: ShoppingCart,
       iconBg: "bg-[#FEF3C7]",

@@ -460,13 +460,63 @@ class OpenAIProvider(AIProvider):
             if any(not item.get("quantity") for item in page_items):
                 needed.add(pn)
                 continue
-            # All ELEVATION items on this page lack a finish — the display header
-            # may only be visible in the drawing, so a text pass cannot inherit it.
+            # Per-display finish gate: flag the page when ANY display's elevation
+            # items all lack finish, even when another display on the same page
+            # has finish. Superset of the old page-level check: when ALL items
+            # lack finish every per-display group also lacks finish, so the old
+            # behaviour is preserved and Display 6 (page 19) still fires.
             elevation_items = [i for i in page_items if i.get("view_type") == "ELEVATION"]
-            if elevation_items and all(not (i.get("finish") or "").strip() for i in elevation_items):
-                needed.add(pn)
+            if elevation_items:
+                import re as _re
+                _disp_groups: Dict[str, list] = {}
+                for _ei in elevation_items:
+                    _m = _re.search(r'display\s*(\d+)', (_ei.get("position") or ""), _re.IGNORECASE)
+                    _dk = f"display_{_m.group(1)}" if _m else "__unknown__"
+                    _disp_groups.setdefault(_dk, []).append(_ei)
+                # Flag if any single display has ALL its elevation items finishless.
+                # A finish on display_1 must not satisfy display_2's items.
+                if any(
+                    all(not (_ei.get("finish") or "").strip() for _ei in _grp)
+                    for _grp in _disp_groups.values()
+                ):
+                    needed.add(pn)
 
         return needed
+
+    def _build_spec_anchor_map(
+        self,
+        page_evidence: List[Dict[str, Any]],
+        text_items: List[Dict[str, Any]],
+        vision_pages: Optional[set],
+    ) -> Dict[int, int]:
+        """
+        Returns {elevation_page_1idx: spec_page_1idx} for Vision-flagged pages
+        whose finish spec lives on a preceding standalone specification page.
+
+        Spec page detection: "FINISH" in raw_text AND zero text-pass items on
+        that page. Looks for the nearest flagged Vision page within 1-3 pages
+        ahead of each spec page.
+        """
+        if not vision_pages:
+            return {}
+        items_per_page: Dict[int, int] = {}
+        for item in text_items:
+            pn = item.get("page_number")
+            if pn is not None:
+                items_per_page[int(pn)] = items_per_page.get(int(pn), 0) + 1
+        anchor_map: Dict[int, int] = {}
+        for p in page_evidence:
+            pn = p["page_number"]
+            if "FINISH" not in (p.get("raw_text") or "").upper():
+                continue
+            if items_per_page.get(pn, 0) > 0:
+                continue  # has extracted items — not a pure spec page
+            for offset in (1, 2, 3):
+                candidate = pn + offset
+                if candidate in vision_pages and candidate not in anchor_map:
+                    anchor_map[candidate] = pn
+                    break
+        return anchor_map
 
     def _vision_batch_extract(
         self,
@@ -479,6 +529,7 @@ class OpenAIProvider(AIProvider):
         vision_prompt_override: Optional[str] = None,
         _usage: Optional[List] = None,
         page_numbers: Optional[set] = None,
+        anchor_map: Optional[Dict[int, int]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Renders every PDF page to an image and extracts items via Vision,
@@ -494,12 +545,85 @@ class OpenAIProvider(AIProvider):
         total_pages = len(doc_fitz)
         effective_prompt = vision_prompt_override or prompt
         items: List[Dict[str, Any]] = []
+        already_anchored: set = set()  # 1-indexed elevation pages processed via anchor calls
+
+        # --- Anchored pages: one dedicated 2-image call per spec+elevation pair ---
+        # Each anchored elevation page gets its own Vision call that sends the
+        # spec page image first (context only) then the elevation image (extract
+        # from here). This lets the model read the finish from the spec sheet
+        # even though finish specs live on a different page from the elevation.
+        if anchor_map:
+            for elev_1idx, spec_1idx in sorted(anchor_map.items()):
+                if page_numbers is not None and elev_1idx not in page_numbers:
+                    continue
+                spec_pno = spec_1idx - 1   # 0-indexed for fitz
+                elev_pno = elev_1idx - 1   # 0-indexed for fitz
+                anchor_content: List[Dict] = [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"{effective_prompt}\n\n"
+                            f"You are analyzing TWO images for this display:\n"
+                            f"IMAGE 1 (page {spec_1idx} of {total_pages}): SPECIFICATION SHEET — "
+                            f"provides the FINISH and DOOR STYLE for this display. "
+                            f"Do NOT extract any cabinet items from this image. "
+                            f"Read only: finish name and door style.\n"
+                            f"IMAGE 2 (page {elev_1idx} of {total_pages}): ELEVATION DRAWING — "
+                            f"extract all cabinet items from this image. "
+                            f"Apply the finish shown in IMAGE 1 to every item, unless an individual "
+                            f"item explicitly shows a different finish. "
+                            f"Never infer finish from cabinet color, wood grain, or SKU code. "
+                            f"Never transfer a finish from a different display.\n"
+                            f"Read any labels, callouts or codes that appear only as drawing "
+                            f"graphics, not as selectable text.\n"
+                            f"You MUST return the response strictly matching this JSON schema:\n"
+                            f"{json.dumps(schema_json)}"
+                        ),
+                    }
+                ]
+                for pno in (spec_pno, elev_pno):
+                    page = doc_fitz[pno]
+                    pix = page.get_pixmap(dpi=dpi)
+                    img_bytes = pix.tobytes("jpeg")
+                    b64 = base64.b64encode(img_bytes).decode("utf-8")
+                    anchor_content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"},
+                    })
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": anchor_content},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.1,
+                    )
+                    _rec = self._make_usage_record(
+                        "vision_anchor", response,
+                        page_start=spec_1idx,
+                        page_end=elev_1idx,
+                        page_count=2,
+                    )
+                    if _rec and _usage is not None:
+                        _usage.append(_rec)
+                    content = response.choices[0].message.content or "{}"
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        items.extend(parsed.get("items", []))
+                    already_anchored.add(elev_1idx)
+                except Exception:
+                    pass  # fall through to plain batch for this page
+
+        # --- Normal batch loop: pages not handled by anchor calls above ---
         for batch_start in range(0, total_pages, batch_size):
             batch_end = min(batch_start + batch_size, total_pages)
-            # page_numbers gate: skip pages not flagged as needing Vision
+            # page_numbers gate: skip pages not flagged or already anchor-processed
             pages_in_batch = [
                 pno for pno in range(batch_start, batch_end)
-                if page_numbers is None or (pno + 1) in page_numbers
+                if (page_numbers is None or (pno + 1) in page_numbers)
+                and (pno + 1) not in already_anchored
             ]
             if not pages_in_batch:
                 continue
@@ -662,12 +786,19 @@ class OpenAIProvider(AIProvider):
                     if vision_pages is not None and len(vision_pages) == 0:
                         vision_items = []
                     else:
+                        # Build spec-page anchor map so elevation pages whose
+                        # finish spec lives on the preceding page receive both
+                        # images in one Vision call (Fix B companion: Option A).
+                        _anchor_map = self._build_spec_anchor_map(
+                            page_evidence, merged_items, vision_pages
+                        )
                         vision_items = self._vision_batch_extract(
                             file_bytes, prompt, schema_json, system_prompt,
                             dpi=200,
                             vision_prompt_override=DESIGN_VISION_PROMPT_V1,
                             _usage=_usage,
                             page_numbers=vision_pages,
+                            anchor_map=_anchor_map or None,
                         )
                     # The text and Vision passes frequently both see the SAME
                     # physical item (whatever is in the text layer is also

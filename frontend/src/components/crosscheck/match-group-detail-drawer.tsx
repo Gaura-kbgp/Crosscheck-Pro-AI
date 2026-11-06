@@ -213,7 +213,7 @@ function DiscrepancyCard({
         <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 sm:min-w-max">
           <ValueBlock label="Design" value={discrepancy.design_value} projectId={group.project_id} item={group.design_item} />
           <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-5 sm:rotate-0 sm:self-auto" />
-          <ValueBlock label="Order" value={discrepancy.order_value} projectId={group.project_id} item={group.order_item} />
+          <ValueBlock label="Cabinet List" value={discrepancy.order_value} projectId={group.project_id} item={group.cabinet_list_item} />
           <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-5 sm:rotate-0 sm:self-auto" />
           <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={group.project_id} item={group.ack_item} />
         </div>

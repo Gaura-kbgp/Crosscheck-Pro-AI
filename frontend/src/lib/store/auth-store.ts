@@ -113,12 +113,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (!sbError && sbData.session?.access_token) {
             const token = sbData.session.access_token;
             setStoredAuthToken(token);
-            set({
-              token,
-              session: { access_token: token },
-            });
-            await get().fetchProfile();
-            set({ isLoading: false });
+            set({ token, session: { access_token: token }, isLoading: false });
+            // fire without await — backend cold start must not block the login redirect
+            get().fetchProfile();
             return;
           } else if (sbError && !sbError.message.toLowerCase().includes("invalid login credentials")) {
             // If it's a specific Supabase error other than invalid credentials, throw it

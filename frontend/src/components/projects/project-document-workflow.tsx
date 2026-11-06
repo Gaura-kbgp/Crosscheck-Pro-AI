@@ -26,9 +26,9 @@ const workflowSteps: {
   },
   {
     step: 2,
-    type: "ORDER",
-    title: "Purchase Order",
-    shortDesc: "Dealer / Client purchase contract",
+    type: "CABINET_LIST",
+    title: "Cabinet List",
+    shortDesc: "Cabinet list from design software",
     icon: ShoppingCart,
   },
   {
@@ -89,7 +89,10 @@ export function ProjectDocumentWorkflow({
       {/* Connected Step Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative">
         {workflowSteps.map((stepItem, index) => {
-          const isUploaded = uploadedTypes.has(stepItem.type);
+          // CABINET_LIST step also lights up for legacy ORDER docs
+        const isUploaded =
+          uploadedTypes.has(stepItem.type) ||
+          (stepItem.type === "CABINET_LIST" && uploadedTypes.has("ORDER"));
 
           return (
             <div

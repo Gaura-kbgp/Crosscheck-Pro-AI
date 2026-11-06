@@ -281,7 +281,7 @@ class ReportService:
 
         for mg in match_groups:
             d_item = mg.design_item
-            o_item = mg.order_item
+            o_item = mg.cabinet_list_item
             a_item = mg.ack_item
 
             # Representative SKU & Description
@@ -379,10 +379,10 @@ class ReportService:
         }
         def _fl(f): return FIELD_LABELS.get(f, (f or "").replace("_", " ").title())
         def _sku(mg):
-            d, o, a = mg.design_item, mg.order_item, mg.ack_item
+            d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
             return mg.final_sku or (d.normalized_sku if d else None) or (o.normalized_sku if o else None) or (a.normalized_sku if a else "N/A") or "N/A"
         def _desc(mg):
-            d, o, a = mg.design_item, mg.order_item, mg.ack_item
+            d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
             return (d.description if d and d.description else None) or (o.description if o and o.description else None) or (a.description if a and a.description else None) or "-"
         def _sv(d_obj):
             sv = d_obj.source_values
@@ -514,7 +514,7 @@ class ReportService:
         if matched_mgs:
             rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty (Design)","Qty (Order)","Qty (Ack)","Result"]]]
             for mg in matched_mgs:
-                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
                 rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:60], small),
                               Paragraph(str(_get_item_qty(d)) if _get_item_qty(d) is not None else "-", small),
                               Paragraph(str(_get_item_qty(o)) if _get_item_qty(o) is not None else "-", small),
@@ -557,7 +557,7 @@ class ReportService:
         if missing_mgs:
             rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty in Design","Found in PO","Found in Ack","Action Needed"]]]
             for mg in missing_mgs:
-                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
                 rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:50], small),
                              Paragraph(str(_get_item_qty(d)) if _get_item_qty(d) is not None else "-", small),
                              Paragraph("-" if o else "<font color='#DC2626'>No</font>", small),
@@ -574,7 +574,7 @@ class ReportService:
         if extra_mgs:
             rows = [[Paragraph(h, th_s) for h in ["Item Code","Description","Qty Ordered","Found in Design","Note"]]]
             for mg in extra_mgs:
-                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
                 rows.append([Paragraph(f"<b>{_sku(mg)}</b>", small_b), Paragraph(_desc(mg)[:50], small),
                              Paragraph(str(_get_item_qty(o)) if _get_item_qty(o) is not None else "-", small),
                              Paragraph("-" if d else "<font color='#D97706'>Not in Design</font>", small),
@@ -590,7 +590,7 @@ class ReportService:
             els.append(Paragraph("The following items could not be conclusively matched. Manual review is recommended before finalising the order.", body)); els.append(Spacer(1,4))
             rows = [[Paragraph(h, th_s) for h in ["Item Code","Available In","Reason for Uncertainty"]]]
             for mg in uncertain_mgs:
-                d, o, a = mg.design_item, mg.order_item, mg.ack_item
+                d, o, a = mg.design_item, mg.cabinet_list_item, mg.ack_item
                 avail = (["Design Drawing"] if d else []) + (["Purchase Order"] if o else []) + (["Mfr. Confirmation"] if a else [])
                 discs = mg_disc_map.get(mg.id, [])
                 reason = (discs[0].explanation if discs and discs[0].explanation else "Automatic matching was inconclusive.")[:120]

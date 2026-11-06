@@ -48,10 +48,10 @@ def _mg(d=None, o=None, a=None, status=MatchGroupStatus.MISSING):
         organization_id=org_id,
         status=status,
         design_item_id=d.id if d else None,
-        order_item_id=o.id if o else None,
+        cabinet_list_item_id=o.id if o else None,
         ack_item_id=a.id if a else None,
         design_item=d,
-        order_item=o,
+        cabinet_list_item=o,
         ack_item=a,
     )
 
@@ -65,7 +65,7 @@ def test_design_version_different_from_global():
     assert DESIGN_EXTRACTION_VERSION != EXTRACTION_VERSION
 
 def test_design_version_value():
-    assert DESIGN_EXTRACTION_VERSION == "f8.3.8"
+    assert DESIGN_EXTRACTION_VERSION == "f8.3.9"
 
 def test_global_version_unchanged():
     """ORDER/ACK cache version must stay at f8.3.6."""

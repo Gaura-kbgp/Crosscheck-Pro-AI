@@ -33,7 +33,7 @@ interface UploadDocumentModalProps {
   onSuccess?: (projectId: string) => void;
 }
 
-const DOC_TYPES: DocumentType[] = ["DESIGN", "ORDER", "ACKNOWLEDGEMENT"];
+const DOC_TYPES: DocumentType[] = ["DESIGN", "CABINET_LIST", "ACKNOWLEDGEMENT"];
 const NEW_PROJECT_VALUE = "__new__";
 
 const ACCEPTED_EXTENSIONS = [
@@ -50,12 +50,13 @@ interface SlotState {
 }
 const emptySlots = (): Record<DocumentType, SlotState> => ({
   DESIGN: { file: null, status: "idle", error: null },
-  ORDER: { file: null, status: "idle", error: null },
+  ORDER: { file: null, status: "idle", error: null },        // legacy key; not shown in modal
+  CABINET_LIST: { file: null, status: "idle", error: null },
   ACKNOWLEDGEMENT: { file: null, status: "idle", error: null },
 });
 
 // One dropzone for one document type — all three render side by side so a
-// project's Design/Order/Acknowledgement can be uploaded in a single pass
+// project's Design/Cabinet List/Acknowledgement can be uploaded in a single pass
 // instead of reopening this modal three times.
 function DocumentSlot({
   type,
@@ -284,7 +285,7 @@ export function UploadDocumentModal({
           </DialogTitle>
         </div>
         <DialogDescription>
-          Add whichever documents you have — Design, Purchase Order, and/or Manufacturer
+          Add whichever documents you have — Design, Cabinet List, and/or Manufacturer
           Acknowledgement — in one go. Processing starts automatically once all three are in.
         </DialogDescription>
       </DialogHeader>

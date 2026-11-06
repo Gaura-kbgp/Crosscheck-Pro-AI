@@ -46,7 +46,7 @@ export function ProjectCardsList({
       {projects.map((project) => {
         const uploadedTypes = project.uploaded_document_types || [];
         const hasDesign = uploadedTypes.includes("DESIGN");
-        const hasOrder = uploadedTypes.includes("ORDER");
+        const hasOrder = uploadedTypes.includes("ORDER") || uploadedTypes.includes("CABINET_LIST");
         const hasAck = uploadedTypes.includes("ACKNOWLEDGEMENT");
 
         const docCount =
@@ -71,7 +71,7 @@ export function ProjectCardsList({
 
         const docs = [
           { key: "DESIGN", label: "Design Spec", short: "Design", isUploaded: hasDesign },
-          { key: "ORDER", label: "Purchase Order", short: "Order", isUploaded: hasOrder },
+          { key: "ORDER", label: "Cabinet List", short: "Cabinet List", isUploaded: hasOrder },
           { key: "ACKNOWLEDGEMENT", label: "Acknowledgment", short: "Ack", isUploaded: hasAck },
         ];
 

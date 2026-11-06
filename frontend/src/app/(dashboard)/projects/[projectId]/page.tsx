@@ -8,6 +8,7 @@ import {
   useProjectDocuments,
   useUploadDocument,
   useDeleteDocument,
+  useReplaceDocument,
   useStartProcessing,
   useJobStatus,
   useCancelJob,
@@ -49,6 +50,7 @@ export default function ProjectDetailPage() {
   // Mutations
   const uploadMutation = useUploadDocument(projectId);
   const deleteMutation = useDeleteDocument(projectId);
+  const replaceMutation = useReplaceDocument(projectId);
   const processMutation = useStartProcessing(projectId);
   const cancelMutation = useCancelJob(projectId);
 
@@ -62,9 +64,12 @@ export default function ProjectDetailPage() {
 
   // Recover the active job id after a page reload/navigation, so Cancel/Retry
   // keep working even when this component remounted mid-processing.
+  // Always fetch the latest job once the project loads — this surfaces a QUEUED
+  // job that was auto-started (e.g. auto-started via upload trigger) even when
+  // project.status hasn't been updated yet.
   const { data: latestJobData } = useLatestJob(
     projectId,
-    !activeJobId && (project?.status === "PROCESSING" || project?.status === "FAILED")
+    !activeJobId && Boolean(project)
   );
   useEffect(() => {
     if (!activeJobId && latestJobData?.id) {
@@ -84,11 +89,17 @@ export default function ProjectDetailPage() {
   // Uploading state per document type
   const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [replacingDocId, setReplacingDocId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Map uploaded documents by type
   const designDoc = documents.find((d) => d.document_type === "DESIGN") || null;
-  const orderDoc = documents.find((d) => d.document_type === "ORDER") || null;
+  // Accept both CABINET_LIST (new) and ORDER (legacy) for the order slot
+  const orderDoc =
+    documents.find((d) => d.document_type === "CABINET_LIST") ||
+    documents.find((d) => d.document_type === "ORDER") ||
+    null;
+  const orderDocType = orderDoc?.document_type ?? "CABINET_LIST";
   const ackDoc =
     documents.find((d) => d.document_type === "ACKNOWLEDGEMENT") || null;
 
@@ -114,6 +125,21 @@ export default function ProjectDetailPage() {
       throw err;
     } finally {
       setUploadingType(null);
+    }
+  };
+
+  const handleReplace = async (documentId: string, type: DocumentType, file: File) => {
+    setActionError(null);
+    setReplacingDocId(documentId);
+    try {
+      await replaceMutation.mutateAsync({ documentId, file });
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Replace failed. Please try again."
+      );
+      throw err;
+    } finally {
+      setReplacingDocId(null);
     }
   };
 
@@ -277,20 +303,22 @@ export default function ProjectDetailPage() {
             projectId={projectId}
             document={designDoc}
             onUpload={handleUpload}
+            onReplace={handleReplace}
             onDelete={handleDelete}
-            isUploading={uploadingType === "DESIGN"}
+            isUploading={uploadingType === "DESIGN" || replacingDocId === designDoc?.id}
             isDeleting={deletingDocId === designDoc?.id}
             canManage={canManage}
           />
 
-          {/* Purchase Order Card */}
+          {/* Cabinet List Card */}
           <ProjectDocumentCard
-            documentType="ORDER"
+            documentType={orderDocType}
             projectId={projectId}
             document={orderDoc}
             onUpload={handleUpload}
+            onReplace={handleReplace}
             onDelete={handleDelete}
-            isUploading={uploadingType === "ORDER"}
+            isUploading={uploadingType === "CABINET_LIST" || uploadingType === "ORDER" || replacingDocId === orderDoc?.id}
             isDeleting={deletingDocId === orderDoc?.id}
             canManage={canManage}
           />
@@ -301,8 +329,9 @@ export default function ProjectDetailPage() {
             projectId={projectId}
             document={ackDoc}
             onUpload={handleUpload}
+            onReplace={handleReplace}
             onDelete={handleDelete}
-            isUploading={uploadingType === "ACKNOWLEDGEMENT"}
+            isUploading={uploadingType === "ACKNOWLEDGEMENT" || replacingDocId === ackDoc?.id}
             isDeleting={deletingDocId === ackDoc?.id}
             canManage={canManage}
           />

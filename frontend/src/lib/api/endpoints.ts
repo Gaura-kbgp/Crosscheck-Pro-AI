@@ -97,6 +97,14 @@ export const documentsApi = {
     apiClient.get<{ url: string }>(
       `/projects/${projectId}/documents/${documentId}`
     ),
+  replace: (projectId: string, documentId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiClient.upload<Document>(
+      `/projects/${projectId}/documents/${documentId}/replace`,
+      formData
+    );
+  },
   delete: (projectId: string, documentId: string) =>
     apiClient.delete<void>(`/projects/${projectId}/documents/${documentId}`),
 };

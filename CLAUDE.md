@@ -59,7 +59,7 @@ Any `redirect_to` URL in Supabase auth flows must be added to **Authentication �
 ```
 Organization  1──* User
 Organization  1──* Project
-Project       1──* Document       (types: DESIGN | ORDER | ACKNOWLEDGEMENT)
+Project       1──* Document       (types: DESIGN | CABINET_LIST | ORDER [legacy] | ACKNOWLEDGEMENT)
 Project       1──* ProcessingJob  (statuses: QUEUED | PROCESSING | COMPLETED | FAILED)
 ProcessingJob 1──* Discrepancy    (severities: CRITICAL | HIGH | MEDIUM | LOW | INFO)
 Discrepancy   1──* DiscrepancyReview
@@ -69,8 +69,8 @@ Discrepancy   1──* DiscrepancyReview
 
 1. User registers → org auto-created → role set (DESIGNER / DEALER / MANUFACTURER)
 2. User creates a Project
-3. User uploads Design + PO + Manufacturer Acknowledgement (single 3-dropzone modal)
-4. **Auto-start**: once all 3 doc types are present, processing job is queued automatically
+3. User uploads Design + Cabinet List (Cyncly export) + Manufacturer Acknowledgement (single 3-dropzone modal)
+4. **Auto-start**: once all 3 doc types are present (DESIGN + CABINET_LIST + ACKNOWLEDGEMENT), processing job is queued automatically
 5. Celery worker runs AI extraction on each document (OpenAI → Gemini fallback)
 6. CrossCheckService runs three-way comparison, creates Discrepancy rows
 7. User reviews discrepancies in the Review page (accept / flag / override per item, or bulk-accept)
@@ -143,6 +143,46 @@ Each role sees role-specific onboarding copy on first login (via `RoleOnboarding
 ---
 
 ## Changelog (newest first)
+
+### 2026-11-06 (session 14 — Document Replace concurrency guards + ProcessingJob Rescan fix)
+- **Stale-worker guards** (`backend/app/worker/tasks/processing.py`): Two document-existence checks added to the pipeline — one before Stage 3 (normalization) and one before Stage 4 (matching). If `replace_document` deletes a source document between Stage 2 and Stage 3, the job fails with a clear message instead of writing empty or stale results. Guard uses a separate `_guard_db` session per check; original `db` session for the stage body is unchanged.
+- **New tests** `tests/test_stale_worker_guard.py` (2 tests): `test_stale_worker_guard_stage3` — AI mock deletes `old_doc` during extraction, asserts job=FAILED + 0 CanonicalLineItems; `test_stale_worker_guard_stage4` — `_update_job_status(MATCHING)` hook deletes `old_doc` before Stage 4 guard runs, asserts job=FAILED + 0 MatchGroups + 0 Discrepancies.
+- **ProcessingJob unique constraint removed** (`backend/app/models/core.py`, new migration `f3a1d9e2b847`): The original migration `bcea0ad4e0af` created `processing_jobs` with `sa.UniqueConstraint('project_id')` → PostgreSQL named it `processing_jobs_project_id_key`. No subsequent migration dropped it. This caused every Rescan after a COMPLETED or FAILED job to hit IntegrityError → silent failure via `_auto_start_processing_if_ready`. Fix: drop the constraint in new migration `2026_11_06_1500-f3a1d9e2b847`. ORM model cleaned up: removed `unique=True` from `project_id` column and removed the two-line post-class hack `ProcessingJob.__table__.columns['project_id'].unique = False` (which only affected SQLite test sessions, never PostgreSQL).
+- **`start_processing` unchanged**: the existing active-job guard (checks `notin_([COMPLETED, FAILED])`) already provides correct deduplication. Only one active job per project is possible; historical completed/failed jobs are preserved.
+- **New tests** `tests/test_processing_rescan.py` (8 tests): first run, rescan after COMPLETED, rescan after FAILED, duplicate-concurrent 409 (3 statuses), `_auto_start_processing_if_ready` silent no-op on 409, 3-run history preservation.
+- **652 tests pass** (excludes deadlock file `test_processing.py`).
+- **Migration `f3a1d9e2b847` NOT yet applied to live DB** — awaiting explicit user approval.
+
+### 2026-11-06 (session 13 — DESIGN + CABINET_LIST + ACK dual-key workflow)
+- **New document type `CABINET_LIST`** (`models/core.py`, Alembic migration `e7a3c9d1f8b2`): Cyncly (20-20 Design) "Item List" export replaces the old PO/ORDER document slot. `ORDER` enum value retained permanently in Postgres (zero data migration; historical projects unaffected).
+- **Alembic migration** (`backend/alembic/versions/2026_11_06_1200-e7a3c9d1f8b2_add_cabinet_list_document_type.py`): Adds `CABINET_LIST` to `documenttype` enum via `autocommit_block()`. Renames DB column `match_groups.order_item_id → cabinet_list_item_id` and updates FK constraint name.
+- **Dual matching key design** (`matching.py`):
+  - `DESIGN.sku ↔ CABINET_LIST.user_code` (via `normalized_sku`)
+  - `CABINET_LIST.manuf_code_normalized ↔ ACK.sku` — DESIGN SKU is **never** used as fallback for ACK matching in a CL project
+  - `is_cabinet_list_project` flag detected once from `order_units` source_type; branches Pass 1 `cand_acks` computation and Pass 2 ACK guard
+  - `_are_cl_ack_equivalent` closure uses `manuf_code_normalized`; returns `(False, "NO_MANUF_CODE", ...)` immediately when None
+  - Pass 2 guard: CL item with no `manuf_code` → `UNCERTAIN` (MISSING_MANUF_CODE) rather than EXTRA
+- **Cabinet List prompt** (`backend/app/integrations/ai/prompts/cabinet_list_v1.py`): Instructs AI to extract `user_code` and `manuf_code` as separate columns, plus `is_non_plan`, `fin_side`, and all standard cabinet fields.
+- **Processing pipeline** (`processing.py`): CABINET_LIST routing uses `OrderExtraction` schema + Cabinet List prompt. Canonical items get `user_code`, `manuf_code`, `manuf_code_normalized`, `fin_side`, `is_non_plan` in `source_metadata`. Stage 4 order_items filter accepts both `ORDER` and `CABINET_LIST`.
+- **D+CL UNCERTAIN (no manuf_code)** (`matching.py` `_evaluate_match_group_status`): D+O-no-A block returns `UNCERTAIN` when CL item has no `manuf_code_normalized`.
+- **MISSING_MANUF_CODE Discrepancy** (`crosscheck.py` `_evaluate_match_group`): UNCERTAIN groups with CL items missing manuf_code generate a `manufacturer_code` WARNING Discrepancy → `_determine_final_state` returns `PENDING_REVIEW`.
+- **ORDER uploads rejected at API boundary** (`documents.py`): New ORDER uploads return 422 with guidance to upload Cabinet List instead. Rescan/reprocessing of historical ORDER projects is unaffected.
+- **`auto_start_processing_if_ready`** (`document_service.py`, `processing_service.py`): Updated to accept ORDER or CABINET_LIST as the "order slot" for the three-document trigger.
+- **`_source_type_value` module-level helper** (`matching.py`): Handles `source_type` as either `DocumentType` enum or plain string — test fixtures pass strings directly.
+- **Column rename propagated** to `crosscheck.py`, `crosscheck_service.py`, `report_service.py`, `review_service.py`, `sample_data_service.py`, `crosscheck.py` (API), `types.ts`, `use-crosscheck.ts`, `match-group-detail-drawer.tsx`, `review-detail-drawer.tsx`, and 10 existing test files.
+- **New test file** `tests/test_cabinet_list_dual_key_matching.py`: 19 tests covering Tests A (3-way via dual keys), B (D+CL matched, ACK by manuf_code), C (CL no DESIGN → EXTRA), D1 (no manuf_code + DESIGN match → UNCERTAIN + WARNING discrepancy + PENDING_REVIEW), D2 (no manuf_code, no DESIGN match → UNCERTAIN), legacy ORDER unaffected, and multi-item/no-cross-contamination scenarios.
+- **631 tests pass** (excludes deadlock file `test_processing.py`).
+- **Migration NOT yet applied to live DB** — awaiting explicit user approval to run Alembic upgrade.
+
+### 2026-11-06 (session 12 — B2 ORDER re-extraction, classification fix applied to Demo Project)
+- **B2 classification fix applied** (`backend/app/engines/classification.py`): The Session 10 `classify()` fix (strip `^display\s+\d+\s*[–—-]` descriptions before keyword matching) was code-only. Session 12 ran ORDER re-extraction with `force_reprocess=true` to materialize the fix into DB records. 71 ORDER items previously classified APPLIANCE → now correctly classified (CABINET / MOLDING / ACCESSORY / UNKNOWN).
+- **ORDER re-extracted**: new record `4f86050f`, attempt=3, version=`f8.3.6`, 127 items, $0.0252. Historical attempt=1 and attempt=2 rows preserved (`is_latest=False`). DESIGN (`a8f87233`, f8.3.7) and ACK (`4e7c9275`, f8.3.6) unchanged.
+- **Match group improvements** (Demo Project, before → after): MATCHED 31→48 (+17), CHANGED 9→5 (-4), MISSING 17→10 (-7), EXTRA 52→42 (-10), UNCERTAIN 53→39 (-14), OUT_OF_SCOPE 0→3 (new), DISCREPANCIES 46→82 (+36 — correct: previously-hidden items now properly evaluated), TOTAL 162→147.
+- **3 ORDER items remain APPLIANCE** (DWB18, DWBTM21FH, MWBTRM24): SKU-token-based (`DW`/`MW` prefix patterns) — not display-header misclassifications. Out of scope; these are a separate SKU-pattern issue.
+- **Login hang fix** (`frontend/src/lib/store/auth-store.ts`): `fetchProfile()` now called without `await` after Supabase auth success. Backend cold start (30–90 s on Render free tier) no longer blocks the login redirect. **Edited locally, NOT pushed/deployed — pending confirmation.**
+- **39 remaining UNCERTAIN groups**: B1 = DESIGN no-finish for Displays 2/4/6 (~20 groups, Fix B target); C = normalization SKU variants (TUKT-1, uct, WBB96, Wbb96 x48); E = genuine discrepancies (BFH9TDR, FLTSHF36, TUKT ACK COCOA).
+- **`matching.py` frozen** per Fix A approval: no changes to matching engine this session.
+- **No test suite changes**: classification fix code (Session 10) already covered by `tests/test_session10_fixes.py`. Re-extraction is a data operation, not a code change.
 
 ### 2026-11-05 (session 10 — classification fix + cross-display dedup + Vision gate finish condition)
 - **Issue 2 — APPLIANCE misclassification fixed** (`backend/app/engines/classification.py`): ORDER AI extractor puts the display section header ("Display 1 – 48in Range Kitchen") as the item description when no item-specific description exists. `classify()` now strips the entire description when it matches `^display\s+\d+\s*[–—-]` before keyword matching. W1848L → CABINET, W1848R → CABINET, FLTSHF24 → UNKNOWN (not APPLIANCE). These items now correctly generate EXTRA discrepancies.

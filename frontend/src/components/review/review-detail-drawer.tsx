@@ -157,7 +157,7 @@ export function ReviewDetailDrawer({
                 <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 sm:min-w-max">
                   <ValueBlock label="Design" value={discrepancy.design_value} projectId={projectId} documentId={group.design_item?.document_id} evidence={group.design_item?.source_metadata?.evidence} cabinetClassification={group.design_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-6 sm:rotate-0 sm:self-auto" />
-                  <ValueBlock label="Order" value={discrepancy.order_value} projectId={projectId} documentId={group.order_item?.document_id} evidence={group.order_item?.source_metadata?.evidence} cabinetClassification={group.order_item?.cabinet_classification} />
+                  <ValueBlock label="Cabinet List" value={discrepancy.order_value} projectId={projectId} documentId={group.cabinet_list_item?.document_id} evidence={group.cabinet_list_item?.source_metadata?.evidence} cabinetClassification={group.cabinet_list_item?.cabinet_classification} />
                   <ArrowRight className="h-4 w-4 text-slate-300 shrink-0 self-center rotate-90 sm:mt-6 sm:rotate-0 sm:self-auto" />
                   <ValueBlock label="Acknowledgement" value={discrepancy.ack_value} projectId={projectId} documentId={group.ack_item?.document_id} evidence={group.ack_item?.source_metadata?.evidence} cabinetClassification={group.ack_item?.cabinet_classification} />
                 </div>

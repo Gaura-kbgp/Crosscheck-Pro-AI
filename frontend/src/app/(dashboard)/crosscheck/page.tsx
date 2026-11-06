@@ -42,7 +42,7 @@ export default function CrossCheckProjectPickerPage() {
         <EmptyState
           icon={GitCompare}
           title="No Projects Available"
-          description="Create a project and upload your Design, Purchase Order, and Acknowledgement documents to perform automated cross-checking."
+          description="Create a project and upload your Design, Cabinet List, and Acknowledgement documents to perform automated cross-checking."
           actionLabel="Create Project"
           onAction={() => router.push("/projects")}
         />
@@ -54,7 +54,7 @@ export default function CrossCheckProjectPickerPage() {
     <div className="space-y-6 pb-12">
       <PageHeader
         title="Three-Way CrossCheck"
-        description="Pick a project to see its Design / Purchase Order / Acknowledgement reconciliation."
+        description="Pick a project to see its Design / Cabinet List / Acknowledgement reconciliation."
       />
 
       <div className="space-y-3">

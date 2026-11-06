@@ -124,7 +124,7 @@ class TestUncertainBehaviorEndToEnd:
         # Because SKUs are completely different, they must NOT falsely match
         assert len(mgs) == 2
         d_group = next(m for m in mgs if m.design_item_id == d_item.id)
-        assert d_group.order_item_id is None
+        assert d_group.cabinet_list_item_id is None
 
 
 class TestExtraVsChangedSemantics:
@@ -288,10 +288,10 @@ class TestExtractionFailureVsMissingItem:
             organization_id=self.org_id,
             status=MatchGroupStatus.MATCHED,
             design_item_id=d_item.id,
-            order_item_id=o_item.id,
+            cabinet_list_item_id=o_item.id,
             ack_item_id=a_item.id,
             design_item=d_item,
-            order_item=o_item,
+            cabinet_list_item=o_item,
             ack_item=a_item
         )
 
@@ -312,7 +312,7 @@ class TestIntroducedAtAttribution:
         d_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.DESIGN, raw_sku="B36", quantity=1)
         o_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.ORDER, raw_sku="B36", quantity=2)
         a_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.ACKNOWLEDGEMENT, raw_sku="B36", quantity=2)
-        mg = MatchGroup(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, status=MatchGroupStatus.MATCHED, design_item_id=d_item.id, order_item_id=o_item.id, ack_item_id=a_item.id, design_item=d_item, order_item=o_item, ack_item=a_item)
+        mg = MatchGroup(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, status=MatchGroupStatus.MATCHED, design_item_id=d_item.id, cabinet_list_item_id=o_item.id, ack_item_id=a_item.id, design_item=d_item, cabinet_list_item=o_item, ack_item=a_item)
 
         discs = self.crosscheck.evaluate([mg], self.proj_id, self.org_id)
         qty_d = next(d for d in discs if d.field == "quantity")
@@ -322,7 +322,7 @@ class TestIntroducedAtAttribution:
         d_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.DESIGN, raw_sku="W2130R", quantity=1)
         o_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.ORDER, raw_sku="W2130R", quantity=1)
         a_item = CanonicalLineItem(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, document_id=uuid4(), source_type=DocumentType.ACKNOWLEDGEMENT, raw_sku="W2142R", substitution_sku="W2130R", quantity=1)
-        mg = MatchGroup(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, status=MatchGroupStatus.CHANGED, design_item_id=d_item.id, order_item_id=o_item.id, ack_item_id=a_item.id, design_item=d_item, order_item=o_item, ack_item=a_item)
+        mg = MatchGroup(id=uuid4(), project_id=self.proj_id, organization_id=self.org_id, status=MatchGroupStatus.CHANGED, design_item_id=d_item.id, cabinet_list_item_id=o_item.id, ack_item_id=a_item.id, design_item=d_item, cabinet_list_item=o_item, ack_item=a_item)
 
         discs = self.crosscheck.evaluate([mg], self.proj_id, self.org_id)
         sub_d = next(d for d in discs if d.field == "sku")

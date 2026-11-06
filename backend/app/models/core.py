@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, Integer, Boolean, Float, UniqueConstraint
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import deferred, relationship
 from app.db.base import Base
 import enum
 from sqlalchemy.types import Uuid
@@ -32,6 +32,7 @@ class ProjectStatus(str, enum.Enum):
 class DocumentType(str, enum.Enum):
     DESIGN = "DESIGN"
     ORDER = "ORDER"
+    CABINET_LIST = "CABINET_LIST"
     ACKNOWLEDGEMENT = "ACKNOWLEDGEMENT"
 
 class ItemCategory(str, enum.Enum):
@@ -334,21 +335,21 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, unique=True) # One active job per project usually, or one job history. Unique constraint can be debated, but typically project -> job is 1:N but we check active ones. Let's not make it unique so we keep history. Wait, user said "Check whether an active job already exists". We can query for it. So no unique=True.
+    project_id = Column(Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    
+
     status = Column(SQLEnum(ProcessingJobStatus), nullable=False, default=ProcessingJobStatus.QUEUED)
     error = Column(JSON, nullable=True)
     correlation_id = Column(String, nullable=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # deferred: excluded from SELECT * until explicitly accessed, so queries
+    # against a DB that hasn't had migration h6c3d2f8a915 applied yet don't fail.
+    last_heartbeat_at = deferred(Column(DateTime(timezone=True), nullable=True))
 
     project = relationship("Project")
     organization = relationship("Organization")
-
-# We remove unique=True from project_id because multiple jobs can be run sequentially.
-ProcessingJob.__table__.columns['project_id'].unique = False
 
 class Extraction(Base):
     """
@@ -462,7 +463,7 @@ class MatchGroup(Base):
     organization_id = Column(Uuid(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     
     design_item_id = Column(Uuid(as_uuid=True), ForeignKey("canonical_line_items.id", ondelete="SET NULL"), nullable=True)
-    order_item_id = Column(Uuid(as_uuid=True), ForeignKey("canonical_line_items.id", ondelete="SET NULL"), nullable=True)
+    cabinet_list_item_id = Column(Uuid(as_uuid=True), ForeignKey("canonical_line_items.id", ondelete="SET NULL"), nullable=True)
     ack_item_id = Column(Uuid(as_uuid=True), ForeignKey("canonical_line_items.id", ondelete="SET NULL"), nullable=True)
 
     status = Column(SQLEnum(MatchGroupStatus), nullable=False)
@@ -483,7 +484,7 @@ class MatchGroup(Base):
     project = relationship("Project")
     organization = relationship("Organization")
     design_item = relationship("CanonicalLineItem", foreign_keys=[design_item_id])
-    order_item = relationship("CanonicalLineItem", foreign_keys=[order_item_id])
+    cabinet_list_item = relationship("CanonicalLineItem", foreign_keys=[cabinet_list_item_id])
     ack_item = relationship("CanonicalLineItem", foreign_keys=[ack_item_id])
     discrepancies = relationship("Discrepancy", back_populates="match_group", cascade="all, delete-orphan")
 

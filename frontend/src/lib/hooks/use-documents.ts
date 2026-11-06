@@ -104,6 +104,26 @@ export function useDeleteDocument(projectId: string) {
   });
 }
 
+export function useReplaceDocument(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ documentId, file }: { documentId: string; file: File }) =>
+      documentsApi.replace(projectId, documentId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: DOCUMENT_KEYS.projectDocuments(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: PROJECT_KEYS.detail(projectId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: PROJECT_KEYS.lists(),
+      });
+    },
+  });
+}
+
 export function useStartProcessing(projectId: string) {
   const queryClient = useQueryClient();
 

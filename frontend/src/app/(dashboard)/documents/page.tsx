@@ -126,7 +126,7 @@ function DocumentsContent() {
       {/* Header */}
       <PageHeader
         title="Documents"
-        description="Manage Design, Purchase Order, and Manufacturer Acknowledgement documents."
+        description="Manage Design, Cabinet List, and Manufacturer Acknowledgement documents."
         actions={
           <Button
             onClick={() => setIsUploadModalOpen(true)}
@@ -160,7 +160,7 @@ function DocumentsContent() {
         <EmptyState
           icon={FileText}
           title="Select a project"
-          description="Choose a project to view and manage its Design, Purchase Order, and Manufacturer Acknowledgement documents."
+          description="Choose a project to view and manage its Design, Cabinet List, and Manufacturer Acknowledgement documents."
           actionLabel="Select Project"
           onAction={() => {
             if (projects.length > 0) {
@@ -175,7 +175,7 @@ function DocumentsContent() {
         <EmptyState
           icon={FileText}
           title="No documents yet"
-          description="Upload the Design, Purchase Order, or Manufacturer Acknowledgement for this project to begin your CrossCheck."
+          description="Upload the Design, Cabinet List, or Manufacturer Acknowledgement for this project to begin your CrossCheck."
           actionLabel="Upload Document"
           onAction={() => setIsUploadModalOpen(true)}
         />

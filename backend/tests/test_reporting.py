@@ -113,7 +113,7 @@ def test_setup(db_session):
         project_id=project.id,
         organization_id=org.id,
         design_item_id=item_d.id,
-        order_item_id=item_o.id,
+        cabinet_list_item_id=item_o.id,
         ack_item_id=item_a.id,
         status=MatchGroupStatus.CHANGED,
         final_sku="B36",

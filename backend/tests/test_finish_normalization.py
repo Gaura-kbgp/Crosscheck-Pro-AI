@@ -43,10 +43,10 @@ def _mg(d=None, o=None, a=None):
         organization_id=org_id,
         status=MatchGroupStatus.CHANGED,
         design_item_id=d.id if d else None,
-        order_item_id=o.id if o else None,
+        cabinet_list_item_id=o.id if o else None,
         ack_item_id=a.id if a else None,
         design_item=d,
-        order_item=o,
+        cabinet_list_item=o,
         ack_item=a,
     )
 

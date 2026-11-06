@@ -8,7 +8,7 @@ export type ProjectStatus =
   | "FINALIZED"
   | "FAILED";
 
-export type DocumentType = "DESIGN" | "ORDER" | "ACKNOWLEDGEMENT";
+export type DocumentType = "DESIGN" | "ORDER" | "CABINET_LIST" | "ACKNOWLEDGEMENT";
 
 export type DocumentStatus = "UPLOADED" | "PROCESSING" | "COMPLETED" | "FAILED";
 
@@ -420,7 +420,7 @@ export interface MatchGroup {
   final_unit_price?: number | null;
   final_total_price?: number | null;
   design_item?: CanonicalItemRef | null;
-  order_item?: CanonicalItemRef | null;
+  cabinet_list_item?: CanonicalItemRef | null;
   ack_item?: CanonicalItemRef | null;
   discrepancies: Discrepancy[];
 }

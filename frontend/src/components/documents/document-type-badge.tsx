@@ -30,7 +30,14 @@ export const DOCUMENT_TYPE_META: Record<
   },
   ORDER: {
     label: "Purchase Order",
-    shortLabel: "Purchase Order",
+    shortLabel: "Order",
+    icon: ShoppingCart,
+    badgeStyle: "bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]",
+    iconColor: "text-[#D97706]",
+  },
+  CABINET_LIST: {
+    label: "Cabinet List",
+    shortLabel: "Cabinet List",
     icon: ShoppingCart,
     badgeStyle: "bg-[#FEF3C7] text-[#B45309] border-[#FDE68A]",
     iconColor: "text-[#D97706]",

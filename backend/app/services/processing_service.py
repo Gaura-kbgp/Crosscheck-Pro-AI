@@ -1,5 +1,8 @@
+from datetime import datetime, timezone, timedelta
 from uuid import UUID
 import uuid
+from sqlalchemy import or_, and_
+from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models.core import ProcessingJob, ProcessingJobStatus, Document, DocumentType, Project, ProjectStatus
@@ -10,11 +13,23 @@ class ProcessingService:
         self.db = db
         
     def start_processing(self, project_id: UUID, organization_id: UUID, background_tasks = None, force_reprocess: bool = False) -> ProcessingJobResponse:
-        # Check if project exists and belongs to organization
-        project = self.db.query(Project).filter(
-            Project.id == project_id,
-            Project.organization_id == organization_id
-        ).first()
+        # SELECT FOR UPDATE serializes concurrent start_processing calls on the same project:
+        # the second caller blocks until the first commits, then sees the active job below
+        # and receives a 409 instead of creating a duplicate.
+        # CompileError fallback: SQLite (tests) doesn't support FOR UPDATE.
+        try:
+            project = (
+                self.db.query(Project)
+                .filter(Project.id == project_id, Project.organization_id == organization_id)
+                .with_for_update()
+                .first()
+            )
+        except CompileError:
+            project = (
+                self.db.query(Project)
+                .filter(Project.id == project_id, Project.organization_id == organization_id)
+                .first()
+            )
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
@@ -37,12 +52,19 @@ class ProcessingService:
         ).all()
         
         doc_types = {doc.document_type for doc in documents}
-        required_types = {DocumentType.DESIGN, DocumentType.ORDER, DocumentType.ACKNOWLEDGEMENT}
-        if not required_types.issubset(doc_types):
-            missing = required_types - doc_types
-            raise HTTPException(status_code=400, detail=f"Project is missing required documents: {[d.value for d in missing]}")
+        has_order_slot = DocumentType.ORDER in doc_types or DocumentType.CABINET_LIST in doc_types
+        if not ({DocumentType.DESIGN, DocumentType.ACKNOWLEDGEMENT}.issubset(doc_types) and has_order_slot):
+            missing = []
+            if DocumentType.DESIGN not in doc_types:
+                missing.append("DESIGN")
+            if not has_order_slot:
+                missing.append("ORDER or CABINET_LIST")
+            if DocumentType.ACKNOWLEDGEMENT not in doc_types:
+                missing.append("ACKNOWLEDGEMENT")
+            raise HTTPException(status_code=400, detail=f"Project is missing required documents: {missing}")
 
-        # Create job
+        # Create job and immediately mark project as processing so the frontend
+        # can show the status card without waiting for the pipeline's Stage 1.
         job = ProcessingJob(
             project_id=project_id,
             organization_id=organization_id,
@@ -50,6 +72,7 @@ class ProcessingService:
             correlation_id=str(uuid.uuid4())
         )
         self.db.add(job)
+        project.status = ProjectStatus.PROCESSING
         self.db.commit()
         self.db.refresh(job)
         
@@ -120,3 +143,50 @@ class ProcessingService:
         self.db.commit()
         self.db.refresh(job)
         return ProcessingJobResponse.model_validate(job)
+
+
+# ── Startup recovery ──────────────────────────────────────────────────────────
+
+_HEARTBEAT_STALE = timedelta(minutes=2)
+_QUEUED_GRACE = timedelta(minutes=5)
+
+
+def recover_stale_jobs(db: Session) -> int:
+    """Mark jobs abandoned by a previous server process as FAILED.
+
+    Multi-instance safe: a job on another running instance has a recent
+    heartbeat and is not touched. Only jobs whose heartbeat is absent
+    (never started) beyond the grace window, or whose heartbeat is older
+    than _HEARTBEAT_STALE, are considered abandoned.
+
+    Returns the number of jobs recovered.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    now = datetime.now(timezone.utc)
+    stuck = db.query(ProcessingJob).filter(
+        ProcessingJob.status.notin_([ProcessingJobStatus.COMPLETED, ProcessingJobStatus.FAILED]),
+        or_(
+            # Pipeline was running but hasn't updated recently — process is gone.
+            ProcessingJob.last_heartbeat_at < now - _HEARTBEAT_STALE,
+            # Pipeline never started (QUEUED), beyond the grace window.
+            and_(
+                ProcessingJob.last_heartbeat_at == None,
+                ProcessingJob.created_at < now - _QUEUED_GRACE,
+            ),
+        ),
+    ).all()
+
+    for job in stuck:
+        logger.warning("Startup recovery: marking job %s (%s) as FAILED", job.id, job.status)
+        job.status = ProcessingJobStatus.FAILED
+        job.error = {"message": "Processing was interrupted by a server restart. Please rescan."}
+        project = db.query(Project).filter(Project.id == job.project_id).first()
+        if project and project.status == ProjectStatus.PROCESSING:
+            project.status = ProjectStatus.FAILED
+
+    if stuck:
+        db.commit()
+
+    return len(stuck)

@@ -95,10 +95,10 @@ class CrossCheckEngine:
 
     def _get_mg_category(self, mg: MatchGroup) -> ItemCategory:
         """Determines the governing category of a match group."""
-        for item in (mg.design_item, mg.order_item, mg.ack_item):
+        for item in (mg.design_item, mg.cabinet_list_item, mg.ack_item):
             if item and hasattr(item, "item_category") and item.item_category and item.item_category != ItemCategory.UNKNOWN:
                 return item.item_category
-        for item in (mg.design_item, mg.order_item, mg.ack_item):
+        for item in (mg.design_item, mg.cabinet_list_item, mg.ack_item):
             if item and hasattr(item, "item_category") and item.item_category:
                 return item.item_category
         return ItemCategory.UNKNOWN
@@ -107,7 +107,7 @@ class CrossCheckEngine:
         discrepancies: List[Discrepancy] = []
 
         d_item = mg.design_item
-        o_item = mg.order_item
+        o_item = mg.cabinet_list_item
         a_item = mg.ack_item
 
         # Design items excluded as belonging to a different display/room
@@ -125,14 +125,36 @@ class CrossCheckEngine:
         if not CATEGORY_DISCREPANCY_POLICY.get(mg_cat, True):
             return []
 
+        # Cabinet List: UNCERTAIN groups where manuf_code is missing surface a
+        # manufacturer_code WARNING so the reviewer knows WHY it's uncertain.
+        if mg.status == MatchGroupStatus.UNCERTAIN and o_item is not None:
+            st = o_item.source_type
+            is_cl = (st.value if hasattr(st, "value") else str(st)) == "CABINET_LIST"
+            if is_cl and not (o_item.source_metadata or {}).get("manuf_code_normalized"):
+                discrepancies.append(self._create_discrepancy(
+                    mg, project_id, organization_id,
+                    "manufacturer_code",
+                    {
+                        "design": d_item.raw_sku if d_item else None,
+                        "cabinet_list_user_code": o_item.raw_sku,
+                        "cabinet_list_manuf_code": None,
+                        "acknowledgement": a_item.raw_sku if a_item else None,
+                    },
+                    {"expected": "manufacturer_code present", "actual": "manufacturer_code missing"},
+                    DocumentType.CABINET_LIST,
+                    Severity.WARNING,
+                    f"Cabinet List item '{o_item.raw_sku}' has no Manufacturer Code — cannot verify against Acknowledgement. Supply the manufacturer's product code for this item."
+                ))
+                return discrepancies
+
         # =============================================================
         # 1. Missing / Extra / State Transition Item Presence Discrepancies
         # =============================================================
-        # Case A: Present in Design, Missing in Order and Missing in Ack
+        # Case A: Present in Design, Missing in Cabinet List and Missing in Ack
         # Note: uncertain_vision=True items (Vision-only, confidence < 0.4) are
         # preserved as MISSING with their flag in source_metadata and notes —
         # human reviewer sees the flag; status is not changed to UNCERTAIN here.
-        if mg.design_item_id and not mg.order_item_id and not mg.ack_item_id:
+        if mg.design_item_id and not mg.cabinet_list_item_id and not mg.ack_item_id:
             sev = Severity.WARNING if mg_cat == ItemCategory.UNKNOWN else Severity.CRITICAL
             exp = (
                 f"Drawing item ({d_item.raw_sku if d_item else 'Item'}) with UNKNOWN classification not found in Purchase Order — requires reviewer confirmation"
@@ -149,8 +171,8 @@ class CrossCheckEngine:
             ))
             return discrepancies
 
-        # Case B: Present in Design, Omitted in Order, Restored/Added in Ack
-        if mg.design_item_id and not mg.order_item_id and mg.ack_item_id:
+        # Case B: Present in Design, Omitted in Cabinet List, Restored/Added in Ack
+        if mg.design_item_id and not mg.cabinet_list_item_id and mg.ack_item_id:
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "item_presence",
                 {"design": "PRESENT", "order": "OMITTED", "acknowledgement": "RESTORED"},
@@ -160,8 +182,8 @@ class CrossCheckEngine:
                 f"State transition: Design → Order (OMITTED), Order → Ack (RESTORED). SKU {d_item.raw_sku} present in Design was omitted in Purchase Order but restored in Acknowledgement"
             ))
 
-        # Case C: Absent in Design, Present in Order, Absent in Ack
-        if not mg.design_item_id and mg.order_item_id and not mg.ack_item_id:
+        # Case C: Absent in Design, Present in Cabinet List, Absent in Ack
+        if not mg.design_item_id and mg.cabinet_list_item_id and not mg.ack_item_id:
             sev = Severity.WARNING if mg_cat == ItemCategory.UNKNOWN else Severity.CRITICAL
             exp = (
                 f"Extra item {o_item.raw_sku} with UNKNOWN classification added in Purchase Order but not acknowledged — requires review"
@@ -178,8 +200,8 @@ class CrossCheckEngine:
             ))
             return discrepancies
 
-        # Case D: Absent in Design, Present in Order, Present in Ack
-        if not mg.design_item_id and mg.order_item_id and mg.ack_item_id:
+        # Case D: Absent in Design, Present in Cabinet List, Present in Ack
+        if not mg.design_item_id and mg.cabinet_list_item_id and mg.ack_item_id:
             sev = Severity.WARNING if mg_cat == ItemCategory.UNKNOWN else Severity.CRITICAL
             exp = (
                 f"Extra item {o_item.raw_sku} with UNKNOWN classification added in Purchase Order and confirmed in Acknowledgement — requires review"
@@ -195,8 +217,8 @@ class CrossCheckEngine:
                 exp
             ))
 
-        # Case E: Absent in Design, Absent in Order, Present in Ack
-        if not mg.design_item_id and not mg.order_item_id and mg.ack_item_id:
+        # Case E: Absent in Design, Absent in Cabinet List, Present in Ack
+        if not mg.design_item_id and not mg.cabinet_list_item_id and mg.ack_item_id:
             sev = Severity.WARNING if mg_cat == ItemCategory.UNKNOWN else Severity.CRITICAL
             exp = (
                 f"Extra item {a_item.raw_sku} with UNKNOWN classification added in Acknowledgement — requires review"
@@ -222,11 +244,11 @@ class CrossCheckEngine:
                     mg, project_id, organization_id, "sku",
                     {
                         "design": mg.design_item.raw_sku if mg.design_item else None,
-                        "order": mg.order_item.raw_sku if mg.order_item else None,
+                        "order": mg.cabinet_list_item.raw_sku if mg.cabinet_list_item else None,
                         "acknowledgement": mg.ack_item.raw_sku
                     },
                     {
-                        "expected": mg.order_item.raw_sku if mg.order_item else mg.design_item.raw_sku,
+                        "expected": mg.cabinet_list_item.raw_sku if mg.cabinet_list_item else mg.design_item.raw_sku,
                         "actual": mg.ack_item.raw_sku
                     },
                     DocumentType.ACKNOWLEDGEMENT,
@@ -235,7 +257,7 @@ class CrossCheckEngine:
                 ))
             else:
                 d_sku = normalize_sku(mg.design_item.raw_sku) if mg.design_item else None
-                o_sku = normalize_sku(mg.order_item.raw_sku) if mg.order_item else None
+                o_sku = normalize_sku(mg.cabinet_list_item.raw_sku) if mg.cabinet_list_item else None
                 a_sku = normalize_sku(mg.ack_item.raw_sku)
                 
                 # Check if Ack SKU differs from Design/Order SKU (evidence-backed manufacturer variant)
@@ -245,7 +267,7 @@ class CrossCheckEngine:
                         mg, project_id, organization_id, "sku",
                         {
                             "design": mg.design_item.raw_sku if mg.design_item else None,
-                            "order": mg.order_item.raw_sku if mg.order_item else None,
+                            "order": mg.cabinet_list_item.raw_sku if mg.cabinet_list_item else None,
                             "acknowledgement": mg.ack_item.raw_sku
                         },
                         {
@@ -268,7 +290,7 @@ class CrossCheckEngine:
             if _qr.get("confidence_status") == "NEEDS_REVIEW":
                 _d_raw = mg.design_item.quantity
                 _d_res = _qr.get("resolved_quantity")
-                _o_qty = _get_item_qty(mg.order_item)
+                _o_qty = _get_item_qty(mg.cabinet_list_item)
                 _a_qty = _get_item_qty(mg.ack_item)
                 _cv = _qr.get("conflicting_views") or {}
                 discrepancies.append(self._create_discrepancy(
@@ -288,7 +310,7 @@ class CrossCheckEngine:
                 ))
 
         d_qty = _get_item_qty(mg.design_item)
-        o_qty = _get_item_qty(mg.order_item)
+        o_qty = _get_item_qty(mg.cabinet_list_item)
         a_qty = _get_item_qty(mg.ack_item)
 
         if d_qty is not None and o_qty is not None and d_qty != o_qty:
@@ -324,7 +346,7 @@ class CrossCheckEngine:
         # 4. Dimension Semantic Comparison
         # =============================================================
         d_dim = mg.design_item.dimensions if mg.design_item else None
-        o_dim = mg.order_item.dimensions if mg.order_item else None
+        o_dim = mg.cabinet_list_item.dimensions if mg.cabinet_list_item else None
         a_dim = mg.ack_item.dimensions if mg.ack_item else None
 
         # Compare Design vs Order only if BOTH specify dimensions explicitly
@@ -356,49 +378,49 @@ class CrossCheckEngine:
         # 5. Finish & Door Style Comparison
         # =============================================================
         d_fin = mg.design_item.finish if mg.design_item else None
-        o_fin = mg.order_item.finish if mg.order_item else None
+        o_fin = mg.cabinet_list_item.finish if mg.cabinet_list_item else None
         a_fin = mg.ack_item.finish if mg.ack_item else None
 
         if d_fin is not None and o_fin is not None and not are_finishes_equivalent(d_fin, o_fin):
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "finish",
-                {"design": mg.design_item.finish, "order": mg.order_item.finish, "acknowledgement": mg.ack_item.finish if mg.ack_item else None},
-                {"expected": mg.design_item.finish, "actual": mg.order_item.finish},
+                {"design": mg.design_item.finish, "order": mg.cabinet_list_item.finish, "acknowledgement": mg.ack_item.finish if mg.ack_item else None},
+                {"expected": mg.design_item.finish, "actual": mg.cabinet_list_item.finish},
                 DocumentType.ORDER,
                 Severity.WARNING,
-                f"Finish changed: Design specifies '{mg.design_item.finish}', but Order specifies '{mg.order_item.finish}'"
+                f"Finish changed: Design specifies '{mg.design_item.finish}', but Order specifies '{mg.cabinet_list_item.finish}'"
             ))
         if o_fin is not None and a_fin is not None and not are_finishes_equivalent(o_fin, a_fin):
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "finish",
-                {"design": mg.design_item.finish if mg.design_item else None, "order": mg.order_item.finish, "acknowledgement": mg.ack_item.finish},
-                {"expected": mg.order_item.finish, "actual": mg.ack_item.finish},
+                {"design": mg.design_item.finish if mg.design_item else None, "order": mg.cabinet_list_item.finish, "acknowledgement": mg.ack_item.finish},
+                {"expected": mg.cabinet_list_item.finish, "actual": mg.ack_item.finish},
                 DocumentType.ACKNOWLEDGEMENT,
                 Severity.WARNING,
-                f"Finish changed: Order specifies '{mg.order_item.finish}', but Acknowledgement specifies '{mg.ack_item.finish}'"
+                f"Finish changed: Order specifies '{mg.cabinet_list_item.finish}', but Acknowledgement specifies '{mg.ack_item.finish}'"
             ))
 
         d_door = normalize_text(mg.design_item.door_style) if mg.design_item else None
-        o_door = normalize_text(mg.order_item.door_style) if mg.order_item else None
+        o_door = normalize_text(mg.cabinet_list_item.door_style) if mg.cabinet_list_item else None
         a_door = normalize_text(mg.ack_item.door_style) if mg.ack_item else None
 
         if d_door is not None and o_door is not None and d_door != o_door:
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "door_style",
-                {"design": mg.design_item.door_style, "order": mg.order_item.door_style, "acknowledgement": mg.ack_item.door_style if mg.ack_item else None},
-                {"expected": mg.design_item.door_style, "actual": mg.order_item.door_style},
+                {"design": mg.design_item.door_style, "order": mg.cabinet_list_item.door_style, "acknowledgement": mg.ack_item.door_style if mg.ack_item else None},
+                {"expected": mg.design_item.door_style, "actual": mg.cabinet_list_item.door_style},
                 DocumentType.ORDER,
                 Severity.WARNING,
-                f"Door style changed: Design specifies '{mg.design_item.door_style}', but Order specifies '{mg.order_item.door_style}'"
+                f"Door style changed: Design specifies '{mg.design_item.door_style}', but Order specifies '{mg.cabinet_list_item.door_style}'"
             ))
         if o_door is not None and a_door is not None and o_door != a_door:
             discrepancies.append(self._create_discrepancy(
                 mg, project_id, organization_id, "door_style",
-                {"design": mg.design_item.door_style if mg.design_item else None, "order": mg.order_item.door_style, "acknowledgement": mg.ack_item.door_style},
-                {"expected": mg.order_item.door_style, "actual": mg.ack_item.door_style},
+                {"design": mg.design_item.door_style if mg.design_item else None, "order": mg.cabinet_list_item.door_style, "acknowledgement": mg.ack_item.door_style},
+                {"expected": mg.cabinet_list_item.door_style, "actual": mg.ack_item.door_style},
                 DocumentType.ACKNOWLEDGEMENT,
                 Severity.WARNING,
-                f"Door style changed: Order specifies '{mg.order_item.door_style}', but Acknowledgement specifies '{mg.ack_item.door_style}'"
+                f"Door style changed: Order specifies '{mg.cabinet_list_item.door_style}', but Acknowledgement specifies '{mg.ack_item.door_style}'"
             ))
 
         # =============================================================
@@ -413,7 +435,7 @@ class CrossCheckEngine:
 
         for spec_field, label in (("species", "Species"), ("construction", "Construction"), ("drawer_box", "Drawer box")):
             d_val = _meta(mg.design_item, spec_field)
-            o_val = _meta(mg.order_item, spec_field)
+            o_val = _meta(mg.cabinet_list_item, spec_field)
             a_val = _meta(mg.ack_item, spec_field)
 
             def _raw(item, key):
@@ -424,20 +446,20 @@ class CrossCheckEngine:
             if d_val is not None and o_val is not None and d_val != o_val:
                 discrepancies.append(self._create_discrepancy(
                     mg, project_id, organization_id, spec_field,
-                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.order_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
-                    {"expected": _raw(mg.design_item, spec_field), "actual": _raw(mg.order_item, spec_field)},
+                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.cabinet_list_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
+                    {"expected": _raw(mg.design_item, spec_field), "actual": _raw(mg.cabinet_list_item, spec_field)},
                     DocumentType.ORDER,
                     Severity.WARNING,
-                    f"{label} changed: Design specifies '{_raw(mg.design_item, spec_field)}', but Order specifies '{_raw(mg.order_item, spec_field)}'"
+                    f"{label} changed: Design specifies '{_raw(mg.design_item, spec_field)}', but Order specifies '{_raw(mg.cabinet_list_item, spec_field)}'"
                 ))
             elif o_val is not None and a_val is not None and o_val != a_val:
                 discrepancies.append(self._create_discrepancy(
                     mg, project_id, organization_id, spec_field,
-                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.order_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
-                    {"expected": _raw(mg.order_item, spec_field), "actual": _raw(mg.ack_item, spec_field)},
+                    {"design": _raw(mg.design_item, spec_field), "order": _raw(mg.cabinet_list_item, spec_field), "acknowledgement": _raw(mg.ack_item, spec_field)},
+                    {"expected": _raw(mg.cabinet_list_item, spec_field), "actual": _raw(mg.ack_item, spec_field)},
                     DocumentType.ACKNOWLEDGEMENT,
                     Severity.WARNING,
-                    f"{label} changed: Order specifies '{_raw(mg.order_item, spec_field)}', but Acknowledgement specifies '{_raw(mg.ack_item, spec_field)}'"
+                    f"{label} changed: Order specifies '{_raw(mg.cabinet_list_item, spec_field)}', but Acknowledgement specifies '{_raw(mg.ack_item, spec_field)}'"
                 ))
 
         return discrepancies
@@ -475,8 +497,8 @@ class CrossCheckEngine:
         # Hierarchy: Ack > Order > Design
         if mg.ack_item_id:
             truth_item = mg.ack_item
-        elif mg.order_item_id:
-            truth_item = mg.order_item
+        elif mg.cabinet_list_item_id:
+            truth_item = mg.cabinet_list_item
         elif mg.design_item_id:
             truth_item = mg.design_item
         else:

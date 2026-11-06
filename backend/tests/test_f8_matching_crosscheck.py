@@ -35,7 +35,7 @@ def test_exact_3way_matching():
     mg = groups[0]
     assert mg.status == MatchGroupStatus.MATCHED
     assert mg.design_item_id == d.id
-    assert mg.order_item_id == o.id
+    assert mg.cabinet_list_item_id == o.id
     assert mg.ack_item_id == a.id
 
 def test_token_equivalent_matching():
@@ -51,7 +51,7 @@ def test_token_equivalent_matching():
     assert len(groups) == 1
     mg = groups[0]
     assert mg.design_item_id == d.id
-    assert mg.order_item_id == o.id
+    assert mg.cabinet_list_item_id == o.id
     assert mg.ack_item_id == a.id
 
     # Test crosscheck discrepancy: Qty changed in Order
@@ -74,7 +74,7 @@ def test_manufacturer_substitution_matching():
     assert len(groups) == 1
     mg = groups[0]
     assert mg.design_item_id == d.id
-    assert mg.order_item_id == o.id
+    assert mg.cabinet_list_item_id == o.id
     assert mg.ack_item_id == a.id
 
     crosscheck = CrossCheckEngine()
@@ -95,7 +95,7 @@ def test_missing_and_extra_detection():
     missing_group = next(g for g in groups if g.design_item_id == d.id)
     assert missing_group.status == MatchGroupStatus.MISSING
 
-    extra_group = next(g for g in groups if g.order_item_id == o_extra.id)
+    extra_group = next(g for g in groups if g.cabinet_list_item_id == o_extra.id)
     assert extra_group.status == MatchGroupStatus.EXTRA
 
     crosscheck = CrossCheckEngine()
@@ -150,7 +150,7 @@ def test_observed_finish_wins_disambiguation_tie_over_inherited():
     groups = matcher.match_items([d], [o_observed, o_inherited], [], proj_id, org_id)
 
     matched_group = next(g for g in groups if g.design_item_id == d.id)
-    assert matched_group.order_item_id == o_observed.id
+    assert matched_group.cabinet_list_item_id == o_observed.id
     assert matched_group.status == MatchGroupStatus.MATCHED
 
 def test_safe_introduced_at_with_unspecified_design_dimension():
@@ -350,7 +350,7 @@ def test_floorplan_elevation_match_no_false_missing():
         source_type=DocumentType.ORDER, raw_sku="B24BP", normalized_sku="B24BP", quantity=2,
     )
     groups = matcher.match_items([d_fp, d_el], [o], [], proj_id, org_id)
-    matched = [g for g in groups if g.design_item_id is not None and g.order_item_id is not None]
+    matched = [g for g in groups if g.design_item_id is not None and g.cabinet_list_item_id is not None]
     missing = [g for g in groups if g.status == MatchGroupStatus.MISSING]
     assert len(matched) == 1
     assert len(missing) == 0

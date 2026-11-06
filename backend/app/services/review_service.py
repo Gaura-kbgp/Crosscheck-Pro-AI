@@ -266,7 +266,7 @@ class ReviewService:
         if not item:
             raise HTTPException(status_code=404, detail="CanonicalLineItem not found")
             
-        if item.id not in [mg.design_item_id, mg.order_item_id, mg.ack_item_id]:
+        if item.id not in [mg.design_item_id, mg.cabinet_list_item_id, mg.ack_item_id]:
             raise HTTPException(status_code=400, detail="Item does not belong to this MatchGroup")
             
         # Preserve previous value

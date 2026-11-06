@@ -16,34 +16,21 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # On startup: mark any jobs stuck in a non-terminal state as FAILED.
-    # uvicorn --reload kills background tasks mid-run; without this, a reload
-    # during extraction leaves the project in PROCESSING forever and blocks
-    # all future Rescans with a 409.
+    # Recover jobs abandoned by a previous server process.
+    # Multi-instance safe: only marks jobs whose heartbeat is stale or absent
+    # beyond the grace window (see recover_stale_jobs for the full policy).
     try:
         from app.db.session import SessionLocal
-        from app.models.core import ProcessingJob, ProcessingJobStatus, Project, ProjectStatus
+        from app.services.processing_service import recover_stale_jobs
         db = SessionLocal()
         try:
-            stuck = db.query(ProcessingJob).filter(
-                ProcessingJob.status.notin_([
-                    ProcessingJobStatus.COMPLETED,
-                    ProcessingJobStatus.FAILED,
-                ])
-            ).all()
-            if stuck:
-                logger.warning("Startup: marking %d stuck job(s) as FAILED", len(stuck))
-                for job in stuck:
-                    job.status = ProcessingJobStatus.FAILED
-                    job.error = {"message": "Server restarted while job was running"}
-                    project = db.query(Project).filter(Project.id == job.project_id).first()
-                    if project and project.status == ProjectStatus.PROCESSING:
-                        project.status = ProjectStatus.FAILED
-                db.commit()
+            count = recover_stale_jobs(db)
+            if count:
+                logger.warning("Startup: recovered %d stale job(s)", count)
         finally:
             db.close()
     except Exception as e:
-        logger.error("Startup cleanup failed (non-fatal): %s", e)
+        logger.error("Startup recovery failed (non-fatal): %s", e)
     yield
 
 

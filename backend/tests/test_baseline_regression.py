@@ -59,7 +59,7 @@ def test_baseline_15_groups_no_false_extra_or_missing():
 
     assert len(groups) == len(BASELINE_SKUS)
     false_alerts = [g for g in groups if g.status in (MatchGroupStatus.EXTRA, MatchGroupStatus.MISSING)]
-    assert false_alerts == [], f"False EXTRA/MISSING alerts: {[g.design_item.raw_sku or g.order_item.raw_sku for g in false_alerts]}"
+    assert false_alerts == [], f"False EXTRA/MISSING alerts: {[g.design_item.raw_sku or g.cabinet_list_item.raw_sku for g in false_alerts]}"
     assert all(g.status in (MatchGroupStatus.MATCHED, MatchGroupStatus.CHANGED) for g in groups)
 
     crosscheck = CrossCheckEngine()
@@ -127,7 +127,7 @@ def test_planted_po_absence_detected():
     discs = crosscheck.evaluate(groups, uuid4(), uuid4())
 
     qr96_group = next(g for g in groups if (g.design_item and g.design_item.raw_sku == "QR96"))
-    assert qr96_group.order_item_id is None
+    assert qr96_group.cabinet_list_item_id is None
     assert qr96_group.ack_item_id is not None
 
     presence_discs = [d for d in discs if d.field == "item_presence" and d.match_group_id == qr96_group.id]

@@ -14,6 +14,12 @@ from app.engines.normalization import (
 )
 
 
+def _source_type_value(item) -> str:
+    """Return source_type as string regardless of whether it's an enum or plain str."""
+    st = item.source_type
+    return st.value if hasattr(st, "value") else str(st)
+
+
 class CanonicalMatchingUnit:
     """
     Encapsulates a document-level aggregated purchasing entity.
@@ -52,6 +58,13 @@ class CanonicalMatchingUnit:
             qr = (raw_items[0].source_metadata or {}).get("quantity_resolution") or {}
             if qr.get("resolved_quantity") is not None:
                 self.aggregate_quantity = qr["resolved_quantity"]
+
+        # Cabinet List dual-key: manuf_code_normalized for ACK matching, user_code otherwise.
+        self.manuf_code_normalized: Optional[str] = (
+            (self.primary_item.source_metadata or {}).get("manuf_code_normalized")
+            if (self.primary_item.source_metadata or {}).get("manuf_code_normalized")
+            else None
+        )
 
         # Attach aggregate info to primary item non-destructively for downstream engines
         self.primary_item.aggregate_quantity = self.aggregate_quantity
@@ -395,8 +408,8 @@ class MatchingEngine:
                 mg.design_item = d_unit.primary_item
                 consumed_design.add(d_unit.id)
             if o_unit:
-                mg.order_item_id = o_unit.primary_item.id
-                mg.order_item = o_unit.primary_item
+                mg.cabinet_list_item_id = o_unit.primary_item.id
+                mg.cabinet_list_item = o_unit.primary_item
                 consumed_order.add(o_unit.id)
             if a_unit:
                 mg.ack_item_id = a_unit.primary_item.id
@@ -404,6 +417,11 @@ class MatchingEngine:
                 consumed_ack.add(a_unit.id)
 
             return mg
+
+        # Is this a Cabinet List project? Set once from order_units source_type.
+        is_cabinet_list_project = any(
+            _source_type_value(u.primary_item) == "CABINET_LIST" for u in order_units
+        )
 
         # -------------------------------------------------------------
         # Helper: Check if unit A and unit B are canonically equivalent
@@ -422,6 +440,24 @@ class MatchingEngine:
             )
             return is_eq, eq_type, conf, evidence
 
+        def _are_cl_ack_equivalent(cl_unit: CanonicalMatchingUnit, a_unit: CanonicalMatchingUnit) -> Tuple[bool, str, float, str]:
+            """Cabinet List → ACK matching: uses manuf_code_normalized, never user_code."""
+            manuf = cl_unit.manuf_code_normalized
+            if not manuf:
+                return False, "NO_MANUF_CODE", 0.0, "Cabinet List item has no manufacturer code"
+            is_eq, conf, eq_type, evidence = check_canonical_equivalence(
+                sku1=manuf,
+                desc1=cl_unit.description,
+                dims1=cl_unit.dimensions,
+                cat1=cl_unit.category,
+                sku2=a_unit.sku,
+                desc2=a_unit.description,
+                dims2=a_unit.dimensions,
+                cat2=a_unit.category,
+                substitution_sku2=a_unit.substitution_sku
+            )
+            return is_eq, eq_type, conf, evidence
+
         # =============================================================
         # Pass 1: Design-Anchored 3-Way & 2-Way Matching
         # =============================================================
@@ -435,14 +471,24 @@ class MatchingEngine:
                 if o.id not in consumed_order and _are_units_equivalent(d, o)[0]
             ]
 
-            # Candidate Ack units (matching Design SKU/description, substitution, or matching Order unit)
-            cand_acks = [
-                a for a in ack_units
-                if a.id not in consumed_ack and (
-                    _are_units_equivalent(d, a)[0] or
-                    any(_are_units_equivalent(o, a)[0] for o in cand_orders)
-                )
-            ]
+            # Candidate Ack units.
+            # Cabinet List projects: match ACK via manuf_code ONLY — never use
+            # design SKU or user_code as a fallback for ACK matching.
+            # Legacy ORDER projects: original logic unchanged.
+            if is_cabinet_list_project:
+                cand_acks = [
+                    a for a in ack_units
+                    if a.id not in consumed_ack and
+                    any(_are_cl_ack_equivalent(o, a)[0] for o in cand_orders)
+                ]
+            else:
+                cand_acks = [
+                    a for a in ack_units
+                    if a.id not in consumed_ack and (
+                        _are_units_equivalent(d, a)[0] or
+                        any(_are_units_equivalent(o, a)[0] for o in cand_orders)
+                    )
+                ]
 
             # Check if other unconsumed design units share equivalence with d
             same_d_units = [
@@ -611,16 +657,28 @@ class MatchingEngine:
                             match_groups.append(_commit_match(None, None, comp_a, MatchGroupStatus.UNCERTAIN, "AMBIGUOUS_DUPLICATE", 0.5, "Ambiguous duplicate item without distinguishing dimensions"))
 
         # =============================================================
-        # Pass 2: Order <-> Ack Matching (for items not in Design -> EXTRA)
+        # Pass 2: Order/CL <-> Ack Matching (for items not in Design -> EXTRA)
         # =============================================================
         for o in order_units:
             if o.id in consumed_order:
                 continue
 
-            cand_acks = [
-                a for a in ack_units
-                if a.id not in consumed_ack and _are_units_equivalent(o, a)[0]
-            ]
+            # Cabinet List: reject ACK matching entirely when manuf_code is absent —
+            # the item is UNCERTAIN (MISSING_MANUF_CODE) rather than EXTRA.
+            if is_cabinet_list_project and not o.manuf_code_normalized:
+                match_groups.append(_commit_match(None, o, None, MatchGroupStatus.UNCERTAIN, "MISSING_MANUF_CODE", 0.5, "Cabinet List item has no manufacturer code — cannot match ACK"))
+                continue
+
+            if is_cabinet_list_project:
+                cand_acks = [
+                    a for a in ack_units
+                    if a.id not in consumed_ack and _are_cl_ack_equivalent(o, a)[0]
+                ]
+            else:
+                cand_acks = [
+                    a for a in ack_units
+                    if a.id not in consumed_ack and _are_units_equivalent(o, a)[0]
+                ]
             same_o_units = [
                 other_o for other_o in order_units
                 if other_o.id not in consumed_order and _are_units_equivalent(o, other_o)[0]
@@ -668,40 +726,53 @@ class MatchingEngine:
             return mg.status
 
         has_d = mg.design_item_id is not None
-        has_o = mg.order_item_id is not None
+        has_o = mg.cabinet_list_item_id is not None
         has_a = mg.ack_item_id is not None
+
+        cl_item = mg.cabinet_list_item
+        is_cabinet_list = cl_item is not None and _source_type_value(cl_item) == "CABINET_LIST"
 
         # 3-way present
         if has_d and has_o and has_a:
             sku_d = normalize_sku(mg.design_item.normalized_sku or mg.design_item.raw_sku)
-            sku_o = normalize_sku(mg.order_item.normalized_sku or mg.order_item.raw_sku)
+            # For Cabinet List, D↔CL compared by user_code (= raw_sku), CL↔ACK by manuf_code.
+            sku_o_for_design = normalize_sku(cl_item.normalized_sku or cl_item.raw_sku) if cl_item else None
             sku_a = normalize_sku(mg.ack_item.normalized_sku or mg.ack_item.raw_sku)
 
-            eq_do = are_skus_equivalent(sku_d, sku_o)[0]
-            eq_oa = are_skus_equivalent(sku_o, sku_a)[0]
-            
-            # If ack has explicit substitution or different SKU, it's CHANGED
+            if is_cabinet_list:
+                manuf = (cl_item.source_metadata or {}).get("manuf_code_normalized")
+                eq_do = are_skus_equivalent(sku_d, sku_o_for_design)[0] if sku_o_for_design else False
+                eq_oa = are_skus_equivalent(manuf, sku_a)[0] if manuf else False
+            else:
+                eq_do = are_skus_equivalent(sku_d, sku_o_for_design)[0] if sku_o_for_design else False
+                eq_oa = are_skus_equivalent(sku_o_for_design, sku_a)[0] if sku_o_for_design else False
+
             if mg.ack_item.substitution_sku or not (eq_do and eq_oa):
                 return MatchGroupStatus.CHANGED
             return MatchGroupStatus.MATCHED
 
-        # Design + Order (No Ack yet or not in Ack)
+        # Design + Cabinet List (No Ack yet or not in Ack)
         if has_d and has_o and not has_a:
             sku_d = normalize_sku(mg.design_item.normalized_sku or mg.design_item.raw_sku)
-            sku_o = normalize_sku(mg.order_item.normalized_sku or mg.order_item.raw_sku)
-            if are_skus_equivalent(sku_d, sku_o)[0]:
+            sku_o = normalize_sku(cl_item.normalized_sku or cl_item.raw_sku) if cl_item else None
+
+            # Cabinet List without manuf_code: UNCERTAIN (reviewer must supply the code)
+            if is_cabinet_list and not (cl_item.source_metadata or {}).get("manuf_code_normalized"):
+                return MatchGroupStatus.UNCERTAIN
+
+            if sku_o and are_skus_equivalent(sku_d, sku_o)[0]:
                 return MatchGroupStatus.MATCHED
             return MatchGroupStatus.CHANGED
 
-        # Missing from Order & Ack
+        # Missing from Order/CL & Ack
         if has_d and not has_o and not has_a:
             return MatchGroupStatus.MISSING
 
-        # Extra in Order or Ack (items absent from Design)
+        # Extra in Order/CL or Ack (items absent from Design)
         if not has_d and (has_o or has_a):
             return MatchGroupStatus.EXTRA
 
-        # Design + Ack without Order
+        # Design + Ack without Order/CL
         if has_d and not has_o and has_a:
             return MatchGroupStatus.CHANGED
 

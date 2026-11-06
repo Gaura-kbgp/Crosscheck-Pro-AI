@@ -80,10 +80,10 @@ class MatchGroupResponse(BaseModel):
     project_id: UUID
     status: MatchGroupStatus
     design_item_id: Optional[UUID] = None
-    order_item_id: Optional[UUID] = None
+    cabinet_list_item_id: Optional[UUID] = None
     ack_item_id: Optional[UUID] = None
     design_item: Optional[CanonicalLineItemResponse] = None
-    order_item: Optional[CanonicalLineItemResponse] = None
+    cabinet_list_item: Optional[CanonicalLineItemResponse] = None
     ack_item: Optional[CanonicalLineItemResponse] = None
     final_sku: Optional[str] = None
     final_quantity: Optional[int] = None
@@ -162,7 +162,7 @@ def get_crosscheck(
         .options(
             selectinload(MatchGroup.discrepancies),
             selectinload(MatchGroup.design_item),
-            selectinload(MatchGroup.order_item),
+            selectinload(MatchGroup.cabinet_list_item),
             selectinload(MatchGroup.ack_item)
         )
     )

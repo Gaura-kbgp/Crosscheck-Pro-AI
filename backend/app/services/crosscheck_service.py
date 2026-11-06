@@ -33,7 +33,7 @@ class CrossCheckService:
         ).all()
         
         design_items = [i for i in items if i.source_type.name == "DESIGN"]
-        order_items = [i for i in items if i.source_type.name == "ORDER"]
+        order_items = [i for i in items if i.source_type.name in ("ORDER", "CABINET_LIST")]
         ack_items = [i for i in items if i.source_type.name == "ACKNOWLEDGEMENT"]
 
         # 3. Matching

@@ -100,7 +100,8 @@ export function DocumentFilterBar({
             >
               <option value="ALL">All Types</option>
               <option value="DESIGN">Design</option>
-              <option value="ORDER">Purchase Order</option>
+              <option value="CABINET_LIST">Cabinet List</option>
+              <option value="ORDER">Order (Legacy)</option>
               <option value="ACKNOWLEDGEMENT">Acknowledgement</option>
             </select>
           </div>

@@ -266,7 +266,7 @@ class TestMatchingSafetyAndAmbiguity:
         # Because categories conflict (APPLIANCE vs CABINET), they must not be merged into a single match group
         assert len(mgs) == 2
         d_mg = next(m for m in mgs if m.design_item_id == d_appl.id)
-        assert d_mg.order_item_id is None
+        assert d_mg.cabinet_list_item_id is None
 
     def test_dimension_conflict_on_token_subset_rejects_match(self):
         # Token subset "B36" vs "B36 1TD" with strongly conflicting depths (e.g. 12" depth vs 24" depth)

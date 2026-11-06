@@ -231,7 +231,7 @@ def test_10_evidence_backed_manufacturer_variant_becomes_one_canonical_group(mat
     assert len(mgs) == 1
     assert mgs[0].status in [MatchGroupStatus.MATCHED, MatchGroupStatus.CHANGED]
     assert mgs[0].design_item_id == d.id
-    assert mgs[0].order_item_id == o.id
+    assert mgs[0].cabinet_list_item_id == o.id
     assert mgs[0].ack_item_id == a.id
 
 
@@ -261,7 +261,7 @@ def test_12_canonical_1_1_1_item_cannot_become_extra(matching_engine, crosscheck
     assert len(mgs) == 1
     assert mgs[0].status != MatchGroupStatus.EXTRA
     assert mgs[0].design_item_id is not None
-    assert mgs[0].order_item_id is not None
+    assert mgs[0].cabinet_list_item_id is not None
     assert mgs[0].ack_item_id is not None
 
 

@@ -108,6 +108,11 @@ class OrderExtractionItem(BaseModel):
     confidence: Optional[float] = None
     page_number: Optional[int] = None
     source_text: Optional[str] = None
+    # Cabinet List (Cyncly export) specific fields — None for PO documents
+    user_code: Optional[str] = None
+    manuf_code: Optional[str] = None
+    fin_side: Optional[str] = None
+    is_non_plan: Optional[bool] = None
 
 class OrderExtraction(BaseModel):
     items: List[OrderExtractionItem]

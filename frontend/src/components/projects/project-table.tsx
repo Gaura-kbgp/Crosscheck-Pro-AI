@@ -69,7 +69,7 @@ export function ProjectTable({
             {projects.map((project) => {
               const uploadedTypes = project.uploaded_document_types || [];
               const hasDesign = uploadedTypes.includes("DESIGN");
-              const hasOrder = uploadedTypes.includes("ORDER");
+              const hasOrder = uploadedTypes.includes("ORDER") || uploadedTypes.includes("CABINET_LIST");
               const hasAck = uploadedTypes.includes("ACKNOWLEDGEMENT");
 
               const docCount =
@@ -94,7 +94,7 @@ export function ProjectTable({
 
               const docs = [
                 { key: "DESIGN", label: "Design Spec", short: "D", isUploaded: hasDesign },
-                { key: "ORDER", label: "Purchase Order", short: "O", isUploaded: hasOrder },
+                { key: "ORDER", label: "Cabinet List", short: "CL", isUploaded: hasOrder },
                 { key: "ACKNOWLEDGEMENT", label: "Ack", short: "A", isUploaded: hasAck },
               ];
 
