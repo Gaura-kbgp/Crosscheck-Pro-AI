@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
+from typing import Optional
 import uuid
 from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import Session
@@ -109,14 +110,14 @@ class ProcessingService:
 
         return ProcessingJobResponse.model_validate(job)
 
-    def get_latest_job(self, project_id: UUID, organization_id: UUID) -> ProcessingJobResponse:
+    def get_latest_job(self, project_id: UUID, organization_id: UUID) -> Optional[ProcessingJobResponse]:
         job = self.db.query(ProcessingJob).filter(
             ProcessingJob.project_id == project_id,
             ProcessingJob.organization_id == organization_id
         ).order_by(ProcessingJob.created_at.desc()).first()
 
         if not job:
-            raise HTTPException(status_code=404, detail="No processing job found for this project")
+            return None
 
         return ProcessingJobResponse.model_validate(job)
 

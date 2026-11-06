@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 
 from app.api.dependencies import get_db, get_current_user
 from app.schemas.user import AuthenticatedUser
@@ -23,7 +23,7 @@ def start_processing(
     service = ProcessingService(db)
     return service.start_processing(project_id, current_user.organization_id, background_tasks, force_reprocess)
 
-@router.get("/projects/{project_id}/jobs/latest", response_model=ProcessingJobResponse)
+@router.get("/projects/{project_id}/jobs/latest", response_model=Optional[ProcessingJobResponse])
 def get_latest_job(
     project_id: UUID,
     db: Session = Depends(get_db),

@@ -118,8 +118,16 @@ export const processingApi = {
     apiClient.get<ProcessingJobResponse>(`/jobs/${jobId}/status`),
   cancel: (jobId: string) =>
     apiClient.post<ProcessingJobResponse>(`/jobs/${jobId}/cancel`),
-  latestJob: (projectId: string) =>
-    apiClient.get<ProcessingJobResponse>(`/projects/${projectId}/jobs/latest`),
+  latestJob: async (projectId: string) => {
+    try {
+      return await apiClient.get<ProcessingJobResponse | null>(`/projects/${projectId}/jobs/latest`);
+    } catch (err: any) {
+      if (err?.response?.status === 404 || err?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  },
   status: (projectId: string) =>
     apiClient.get<ProcessingStatus>(`/projects/${projectId}/processing/status`),
 };

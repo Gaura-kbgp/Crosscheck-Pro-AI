@@ -170,11 +170,14 @@ export function useLatestJob(projectId: string, enabled: boolean = true) {
     enabled: Boolean(projectId) && enabled,
     retry: false,
     refetchInterval: (query) => {
+      if (query.state.error) return false;
       const data = query.state.data;
-      if (data && (data.status === "COMPLETED" || data.status === "FAILED")) {
+      if (!data) return false; // Do not poll when no job has been started yet
+      // Stop polling on terminal states
+      if (data.status === "COMPLETED" || data.status === "FAILED") {
         return false;
       }
-      return 2000; // Poll every 2s if latest job is in active stage
+      return 2000; // Poll every 2s while an active job is running
     },
     refetchIntervalInBackground: true,
     staleTime: 0,
