@@ -344,9 +344,8 @@ class ProcessingJob(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    # deferred: excluded from SELECT * until explicitly accessed, so queries
-    # against a DB that hasn't had migration h6c3d2f8a915 applied yet don't fail.
-    last_heartbeat_at = deferred(Column(DateTime(timezone=True), nullable=True))
+    # last_heartbeat_at column lives in migration h6c3d2f8a915 (not yet applied to live DB).
+    # Re-add here and restore full recover_stale_jobs logic once migration is applied.
 
     project = relationship("Project")
     organization = relationship("Organization")

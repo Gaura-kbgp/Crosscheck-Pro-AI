@@ -1,7 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
 import uuid
-from sqlalchemy import or_, and_
 from sqlalchemy.exc import CompileError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -165,17 +164,11 @@ def recover_stale_jobs(db: Session) -> int:
     logger = logging.getLogger(__name__)
 
     now = datetime.now(timezone.utc)
+    # shortcut: only recovers QUEUED jobs (no heartbeat column yet); restore
+    # full heartbeat-based recovery once migration h6c3d2f8a915 is applied.
     stuck = db.query(ProcessingJob).filter(
-        ProcessingJob.status.notin_([ProcessingJobStatus.COMPLETED, ProcessingJobStatus.FAILED]),
-        or_(
-            # Pipeline was running but hasn't updated recently — process is gone.
-            ProcessingJob.last_heartbeat_at < now - _HEARTBEAT_STALE,
-            # Pipeline never started (QUEUED), beyond the grace window.
-            and_(
-                ProcessingJob.last_heartbeat_at == None,
-                ProcessingJob.created_at < now - _QUEUED_GRACE,
-            ),
-        ),
+        ProcessingJob.status == ProcessingJobStatus.QUEUED,
+        ProcessingJob.created_at < now - _QUEUED_GRACE,
     ).all()
 
     for job in stuck:
