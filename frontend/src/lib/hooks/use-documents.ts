@@ -158,6 +158,7 @@ export function useJobStatus(jobId: string | null, enabled: boolean = true) {
       }
       return 2000; // Poll every 2s during active processing
     },
+    refetchIntervalInBackground: true,
     staleTime: 0,
   });
 }
@@ -168,6 +169,14 @@ export function useLatestJob(projectId: string, enabled: boolean = true) {
     queryFn: () => processingApi.latestJob(projectId),
     enabled: Boolean(projectId) && enabled,
     retry: false,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && (data.status === "COMPLETED" || data.status === "FAILED")) {
+        return false;
+      }
+      return 2000; // Poll every 2s if latest job is in active stage
+    },
+    refetchIntervalInBackground: true,
     staleTime: 0,
   });
 }

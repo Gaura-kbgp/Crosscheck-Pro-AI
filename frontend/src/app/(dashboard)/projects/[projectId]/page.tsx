@@ -62,29 +62,30 @@ export default function ProjectDetailPage() {
     Boolean(activeJobId)
   );
 
-  // Recover the active job id after a page reload/navigation, so Cancel/Retry
-  // keep working even when this component remounted mid-processing.
-  // Always fetch the latest job once the project loads — this surfaces a QUEUED
-  // job that was auto-started (e.g. auto-started via upload trigger) even when
-  // project.status hasn't been updated yet.
+  // Always fetch the latest job once the project loads — this surfaces active/queued
+  // jobs and allows real-time recovery on page reload or background processing.
   const { data: latestJobData } = useLatestJob(
     projectId,
-    !activeJobId && Boolean(project)
+    Boolean(project)
   );
   useEffect(() => {
-    if (!activeJobId && latestJobData?.id) {
+    if (latestJobData?.id && activeJobId !== latestJobData.id) {
       setActiveJobId(latestJobData.id);
     }
   }, [activeJobId, latestJobData]);
 
+  const currentJobStatus = jobStatusData?.status || latestJobData?.status;
+  const currentJobError = jobStatusData?.error || latestJobData?.error;
+  const isJobTerminal = currentJobStatus === "COMPLETED" || currentJobStatus === "FAILED";
+
   // Refresh project + docs when job reaches a terminal state so the
   // header badge and button update from "Processing" to the final status.
   useEffect(() => {
-    if (jobStatusData?.status === "COMPLETED" || jobStatusData?.status === "FAILED") {
+    if (isJobTerminal) {
       refetchProject();
       refetchDocs();
     }
-  }, [jobStatusData?.status]);
+  }, [isJobTerminal]);
 
   // Uploading state per document type
   const [uploadingType, setUploadingType] = useState<DocumentType | null>(null);
@@ -106,10 +107,7 @@ export default function ProjectDetailPage() {
   const isAllUploaded = Boolean(designDoc && orderDoc && ackDoc);
   const isProcessing =
     processMutation.isPending ||
-    (Boolean(activeJobId) && !jobStatusData) || // waiting for first poll after POST returns
-    (Boolean(jobStatusData) &&
-      jobStatusData?.status !== "COMPLETED" &&
-      jobStatusData?.status !== "FAILED") ||
+    (Boolean(currentJobStatus) && !isJobTerminal) ||
     project?.status === "PROCESSING";
 
   // Handlers
@@ -266,12 +264,10 @@ export default function ProjectDetailPage() {
 
       {/* 2. Active Pipeline Processing Status Card */}
       {!isStatusCardDismissed &&
-        (isProcessing ||
-          jobStatusData?.status === "COMPLETED" ||
-          jobStatusData?.status === "FAILED") && (
+        (isProcessing || isJobTerminal) && (
           <ProcessingStatusCard
-            status={jobStatusData?.status || "QUEUED"}
-            error={jobStatusData?.error}
+            status={currentJobStatus || "QUEUED"}
+            error={currentJobError}
             projectId={projectId}
             onRetry={() => handleStartCrossCheck()}
             onDismiss={() => setIsStatusCardDismissed(true)}

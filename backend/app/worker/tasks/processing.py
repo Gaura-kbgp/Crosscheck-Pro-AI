@@ -460,9 +460,13 @@ def _run_pipeline_inner(job_id_str: str, project_id_str: str, organization_id_st
                     source_meta["line_number"] = item.get("line_number")
                     # Cabinet List dual-key: user_code (matches DESIGN) is the raw_sku
                     # already set above; manuf_code (matches ACK) is stored here.
-                    source_meta["user_code"] = item.get("user_code")
-                    source_meta["manuf_code"] = item.get("manuf_code")
-                    source_meta["manuf_code_normalized"] = normalize_sku(item.get("manuf_code"))
+                    # When manuf_code is not distinct in the takeoff (or omitted by extractor),
+                    # fall back to user_code so real dealer orders can match ACK.
+                    user_code = item.get("user_code") or item.get("sku") or canonical.raw_sku
+                    manuf_code = item.get("manuf_code") or user_code
+                    source_meta["user_code"] = user_code
+                    source_meta["manuf_code"] = manuf_code
+                    source_meta["manuf_code_normalized"] = normalize_sku(manuf_code)
                     source_meta["fin_side"] = item.get("fin_side")
                     source_meta["is_non_plan"] = item.get("is_non_plan")
                     canonical.source_metadata = source_meta

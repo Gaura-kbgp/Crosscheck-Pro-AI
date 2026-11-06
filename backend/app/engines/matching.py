@@ -220,8 +220,8 @@ def aggregate_document_items(items: List[CanonicalLineItem]) -> List[CanonicalMa
         meta = item.source_metadata or {}
         if meta.get("view_type"):
             pos = meta.get("position", "") or ""
-            pm = re.search(r'display\s*(\d+)', pos, re.IGNORECASE)
-            pos_key = f"display_{pm.group(1)}" if pm else (normalize_text(pos) or "")
+            pm = re.search(r'(?:display|room)\s*(\d+)', pos, re.IGNORECASE)
+            pos_key = f"display_{pm.group(1)}" if pm else ""
         group_key = f"{norm_sku}__FIN_{fin}__DOOR_{door}__POS_{pos_key}"
         
         if group_key not in groups:

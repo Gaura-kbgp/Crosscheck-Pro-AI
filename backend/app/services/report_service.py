@@ -405,7 +405,9 @@ class ReportService:
         has_critical = any((d.severity.value if hasattr(d.severity, "value") else str(d.severity)).upper() == "CRITICAL" for d in discrepancies)
 
         doc_by_type = {(d.document_type.name if hasattr(d.document_type, "name") else str(d.document_type)): d for d in documents}
-        design_d = doc_by_type.get("DESIGN"); order_d = doc_by_type.get("ORDER"); ack_d = doc_by_type.get("ACKNOWLEDGEMENT")
+        design_d = doc_by_type.get("DESIGN")
+        order_d = doc_by_type.get("ORDER") or doc_by_type.get("CABINET_LIST")
+        ack_d = doc_by_type.get("ACKNOWLEDGEMENT")
 
         # --- PDF setup ---
         buffer = io.BytesIO()
@@ -645,7 +647,8 @@ class ReportService:
         # -- 12. DOCUMENTS REVIEWED --
         els += sec_hdr("Documents Reviewed", GREY)
         doc_rows = [[Paragraph(h, th_s) for h in ["Document Type","File Name","Status"]]]
-        for lbl, dobj in [("Design Drawing",design_d),("Purchase Order",order_d),("Manufacturer Confirmation",ack_d)]:
+        order_label = "Cabinet List" if (order_d and getattr(order_d, "document_type", None) == DocumentType.CABINET_LIST) else "Purchase Order"
+        for lbl, dobj in [("Design Drawing", design_d), (order_label, order_d), ("Manufacturer Confirmation", ack_d)]:
             if dobj:
                 fname = dobj.original_filename or "-"
                 status = dobj.status.value if hasattr(dobj.status,"value") else str(dobj.status)
